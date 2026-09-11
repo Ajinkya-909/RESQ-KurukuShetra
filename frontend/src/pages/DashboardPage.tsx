@@ -183,14 +183,29 @@ const RightCommandPanel: React.FC<{
               <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
               <h4 className="text-sm font-black text-slate-900">All Proposals Processed</h4>
               <p className="text-slate-500">
-                No pending resource allocations awaiting Commander review. Advance +1h Tick to trigger next agent optimization cycle.
+                No pending resource allocations awaiting Commander review. Advance +1h Tick or submit an SOS Report to trigger next agent optimization cycle.
               </p>
             </div>
           ) : (
             data.pending_approvals.map((alloc) => (
-              <div key={alloc.allocation_id} className="p-4 rounded-2xl bg-slate-50/60 border border-slate-200 hover:border-blue-400 transition-all space-y-3">
+              <div
+                key={alloc.allocation_id}
+                className={`p-4 rounded-2xl border transition-all space-y-3 ${
+                  alloc.report_id
+                    ? 'bg-rose-50/30 border-rose-200 hover:border-rose-400 shadow-sm'
+                    : 'bg-slate-50/60 border-slate-200 hover:border-blue-400'
+                }`}
+              >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-mono font-bold text-slate-400">Allocation #{alloc.allocation_id}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono font-bold text-slate-400">Allocation #{alloc.allocation_id}</span>
+                    {alloc.report_id && (
+                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-rose-600 text-white shadow-sm flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" />
+                        <span>Target: SOS Report #{alloc.report_id}</span>
+                      </span>
+                    )}
+                  </div>
                   <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
                     Awaiting Approval
                   </span>
@@ -204,6 +219,11 @@ const RightCommandPanel: React.FC<{
                   <div className="text-xs text-slate-600 font-medium">
                     From: <strong className="text-slate-800">{alloc.point_name}</strong> → To: <strong className="text-blue-700">{alloc.zone_name}</strong>
                   </div>
+                  {alloc.report_text && (
+                    <div className="text-xs font-semibold text-rose-800 italic bg-rose-50 p-2 rounded-xl border border-rose-100 mt-1">
+                      "{alloc.report_text}"
+                    </div>
+                  )}
                 </div>
 
                 {/* Explainable AI Reasoning Box */}
@@ -238,6 +258,115 @@ const RightCommandPanel: React.FC<{
                 </div>
               </div>
             ))
+          )}
+        </div>
+      )}
+
+      {/* Tab 2: SOS Alerts Emergency Stream */}
+      {activeTab === 'sos' && (
+        <div className="flex-1 overflow-y-auto pt-4 space-y-3 pr-1">
+          {(!data?.active_reports || data.active_reports.length === 0) ? (
+            <div className="p-12 text-center bg-slate-50 rounded-3xl border border-slate-200 text-xs text-slate-500 font-medium space-y-2 my-auto">
+              <Radio className="w-10 h-10 text-slate-400 mx-auto" />
+              <p>No active citizen SOS emergency reports filed in this corridor.</p>
+            </div>
+          ) : (
+            data.active_reports.map((rep) => {
+              // Find all pending proposed allocations targeting this specific report
+              const reportProposals = (data?.pending_approvals || []).filter(
+                (a) => a.report_id === rep.report_id
+              );
+
+              return (
+                <div key={rep.report_id} className={`p-4 rounded-2xl border space-y-3 shadow-sm ${
+                  rep.verification_status === 'duplicate'
+                    ? 'bg-amber-50/50 border-amber-300'
+                    : 'bg-rose-50/40 border-rose-200'
+                }`}>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className={`font-extrabold uppercase flex items-center gap-1.5 ${
+                      rep.verification_status === 'duplicate' ? 'text-amber-800' : 'text-rose-700'
+                    }`}>
+                      <Radio className={`w-3.5 h-3.5 ${rep.verification_status === 'duplicate' ? 'text-amber-600' : 'text-rose-600 animate-pulse'}`} />
+                      <span>SOS #{rep.report_id} {rep.zone_name ? `• ${rep.zone_name}` : ''}</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {new Date(rep.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+
+                  <p className="text-xs font-bold text-slate-800 italic">"{rep.raw_text}"</p>
+
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className={`px-2.5 py-0.5 rounded-md font-black ${
+                      rep.verification_status === 'duplicate'
+                        ? 'bg-amber-100 text-amber-900'
+                        : 'bg-rose-100 text-rose-800'
+                    }`}>
+                      {rep.verification_status === 'duplicate'
+                        ? '⚠️ Duplicate Cluster Flagged'
+                        : `Severity Signal: ${((rep.severity_signal || 0.5) * 10).toFixed(1)} / 10`}
+                    </span>
+                    <span className="text-slate-500 font-medium capitalize">
+                      Status: <strong className={rep.verification_status === 'duplicate' ? 'text-amber-700' : 'text-emerald-700'}>{rep.verification_status || 'verified'}</strong>
+                    </span>
+                  </div>
+
+                  {/* Proposed Resource Allocations for THIS SOS Report */}
+                  <div className="mt-2 pt-2 border-t border-rose-100 space-y-2">
+                    <div className="text-[11px] font-black text-slate-700 uppercase tracking-wider flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Package className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Direct SOS Dispatches ({reportProposals.length})</span>
+                      </span>
+                    </div>
+
+                    {rep.verification_status === 'duplicate' ? (
+                      <p className="text-[11px] text-amber-800 font-medium italic bg-amber-50 p-2 rounded-xl border border-amber-200">
+                        Linked to existing incident cluster. Redundant duplicate dispatches suppressed to avoid over-saturating zone.
+                      </p>
+                    ) : reportProposals.length === 0 ? (
+                      <p className="text-[11px] text-slate-500 italic">
+                        Allocations approved or dispatched to target coordinates.
+                      </p>
+                    ) : (
+                      reportProposals.map((alloc) => (
+                        <div
+                          key={alloc.allocation_id}
+                          className="p-2.5 rounded-xl bg-white border border-rose-200 flex items-center justify-between gap-2 shadow-2xs"
+                        >
+                          <div className="text-xs">
+                            <span className="font-bold text-slate-900 block">
+                              {alloc.quantity} {alloc.resource_name}
+                            </span>
+                            <span className="text-[10px] text-slate-500">
+                              From: <strong>{alloc.point_name}</strong> → <span className="text-rose-700 font-bold">Direct SOS Location</span>
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleApprove(alloc.allocation_id)}
+                              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-sm transition-all flex items-center gap-1 cursor-pointer"
+                              title="Approve this direct dispatch for SOS report"
+                            >
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>Dispatch</span>
+                            </button>
+                            <button
+                              onClick={() => handleReject(alloc.allocation_id)}
+                              className="px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-rose-600 text-[11px] font-bold transition-all cursor-pointer"
+                              title="Reject allocation"
+                            >
+                              <XCircle className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       )}

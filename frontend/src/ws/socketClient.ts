@@ -9,6 +9,25 @@ const WS_URL = (import.meta as any).env?.VITE_WS_URL || 'http://localhost:3001';
 let socket: Socket | null = null;
 let currentScenarioId: string | null = null;
 
+// Persistent event listener registry
+const listeners = new Map<string, Set<(...args: any[]) => void>>();
+
+const attachAllListeners = (s: Socket) => {
+  listeners.forEach((callbacks, event) => {
+    // Attach single multiplexer for each event
+    s.off(event);
+    s.on(event, (...args: any[]) => {
+      callbacks.forEach((cb) => {
+        try {
+          cb(...args);
+        } catch (e) {
+          console.error(`Error in socket listener for ${event}:`, e);
+        }
+      });
+    });
+  });
+};
+
 export const getSocket = (): Socket | null => socket;
 
 export const connectSocket = (
@@ -33,7 +52,7 @@ export const connectSocket = (
     transports: ['websocket', 'polling'],
     query: { scenario_id: scenarioId },
     reconnection: true,
-    reconnectionAttempts: 10,
+    reconnectionAttempts: 20,
     reconnectionDelay: 1000,
   });
 
@@ -48,6 +67,8 @@ export const connectSocket = (
   socket.on('connect_error', (err) => {
     callbacks?.onError?.(err);
   });
+
+  attachAllListeners(socket);
 
   return socket;
 };
@@ -65,13 +86,23 @@ export const socketClient = {
   disconnect: disconnectSocket,
   getSocket,
   on: (event: string, callback: (...args: any[]) => void) => {
-    if (socket) {
-      socket.on(event, callback);
-      return () => {
-        socket?.off(event, callback);
-      };
+    if (!listeners.has(event)) {
+      listeners.set(event, new Set());
     }
-    return () => {};
+    const set = listeners.get(event)!;
+    set.add(callback);
+
+    if (socket) {
+      attachAllListeners(socket);
+    }
+
+    return () => {
+      set.delete(callback);
+      if (set.size === 0) {
+        listeners.delete(event);
+        socket?.off(event);
+      }
+    };
   },
 };
 

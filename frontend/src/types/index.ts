@@ -184,6 +184,12 @@ export interface DashboardData {
     zone_name?: string | null;
     raw_text?: string;
     created_at: string;
+    pending_allocations?: Array<{
+      allocation_id: number;
+      point_name: string;
+      resource_name: string;
+      quantity: number;
+    }>;
   }>;
   supply_lines: Array<{
     allocation_id: number;
@@ -203,6 +209,10 @@ export interface DashboardData {
     zone_name: string;
     resource_name: string;
     quantity: number;
+    report_id?: number | null;
+    report_text?: string | null;
+    target_lat?: number;
+    target_lng?: number;
     reasoning?: string | null;
   }>;
   duplicate_flags?: Array<{

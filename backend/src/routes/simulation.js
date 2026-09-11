@@ -63,13 +63,13 @@ router.post('/start', async (req, res, next) => {
           .filter((a) => a.zone_id && a.point_id && a.resource_id && a.quantity > 0)
           .map((a) => ({
             scenario_id: scenarioId,
-            zone_id: a.zone_id,
-            point_id: a.point_id,
-            resource_id: a.resource_id,
-            quantity: a.quantity,
-            target_lat: a.target_lat || 0,
-            target_lng: a.target_lng || 0,
-            status: 'proposed',
+            zone_id:     parseInt(a.zone_id),
+            point_id:    parseInt(a.point_id),
+            resource_id: parseInt(a.resource_id),
+            quantity:    Math.max(1, Math.round(a.quantity)),
+            target_lat:  parseFloat(a.target_lat || 0),
+            target_lng:  parseFloat(a.target_lng || 0),
+            status:      'proposed',
           }));
 
         if (validAllocations.length > 0) {
@@ -147,7 +147,26 @@ router.post('/tick', async (req, res, next) => {
           where: { allocation_id: { in: delivered.map((d) => d.allocation_id) } },
           data: { status: 'delivered', updated_at: new Date() },
         });
-        tickEvents.push(`${delivered.length} allocations auto-delivered`);
+
+        // Decrement in_transit & total_stock for auto-delivered allocations to maintain inventory consistency
+        for (const alloc of delivered) {
+          await tx.helpingPointInventory.update({
+            where: { point_id_resource_id: { point_id: alloc.point_id, resource_id: alloc.resource_id } },
+            data: { in_transit: { decrement: alloc.quantity }, total_stock: { decrement: alloc.quantity } },
+          });
+          await tx.auditLog.create({
+            data: {
+              scenario_id: scenarioId,
+              event_type: 'allocation_delivered',
+              agent_name: 'system',
+              zone_id: alloc.zone_id,
+              point_id: alloc.point_id,
+              allocation_id: alloc.allocation_id,
+              reasoning_text: `Auto-delivery completed: Convoy for Allocation #${alloc.allocation_id} reached zone ${alloc.zone_id}`,
+            },
+          });
+        }
+        tickEvents.push(`${delivered.length} allocations auto-delivered to disaster zones`);
       }
 
       await tx.auditLog.create({

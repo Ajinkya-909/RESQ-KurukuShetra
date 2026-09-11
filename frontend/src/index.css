@@ -2,10 +2,10 @@
 
 @layer base {
   html, body {
-    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'Plus Jakarta Sans', 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     background-color: #f8fafc;
     color: #0f172a;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.015em;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -14,8 +14,9 @@
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-weight: 700;
-    letter-spacing: -0.02em;
+    font-family: 'Plus Jakarta Sans', 'Outfit', sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.03em;
   }
 }
 
@@ -134,6 +135,87 @@
 
 .animated-supply-line-enroute {
   animation: flowSupplyDash 0.75s linear infinite;
+}
+
+/* Modern Hero Keyframe Animations */
+@keyframes heroFloatSlow {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(0.4deg);
+  }
+}
+
+@keyframes heroFloatBadge {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes heroPulseGlow {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.06);
+  }
+}
+
+@keyframes heroShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.hero-float-slow {
+  animation: heroFloatSlow 6s ease-in-out infinite;
+}
+
+.hero-float-badge {
+  animation: heroFloatBadge 3.8s ease-in-out infinite;
+}
+
+.hero-float-badge-delayed {
+  animation: heroFloatBadge 4.4s ease-in-out 1.2s infinite;
+}
+
+.hero-pulse-glow {
+  animation: heroPulseGlow 4s ease-in-out infinite;
+}
+
+.shimmer-text {
+  background: linear-gradient(90deg, #1d4ed8 0%, #2563eb 25%, #0284c7 50%, #2563eb 75%, #1d4ed8 100%);
+  background-size: 200% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: heroShimmer 4s linear infinite;
+}
+
+/* Subtle organic flowing wave background */
+@keyframes waveFlow {
+  0% {
+    transform: translateX(0) translateZ(0) scaleY(1);
+  }
+  50% {
+    transform: translateX(-25%) translateZ(0) scaleY(0.85);
+  }
+  100% {
+    transform: translateX(-50%) translateZ(0) scaleY(1);
+  }
+}
+
+.hero-wave-animation {
+  animation: waveFlow 22s cubic-bezier(0.36, 0.45, 0.63, 0.53) infinite;
 }
 
 

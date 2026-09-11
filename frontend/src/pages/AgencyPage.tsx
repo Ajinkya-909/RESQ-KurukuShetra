@@ -135,8 +135,8 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
           allocation_id: a.allocation_id,
           from_lat: depot?.lat || 18.5204,
           from_lng: depot?.lng || 73.8567,
-          to_lat: zone?.center_lat || 18.5300,
-          to_lng: zone?.center_lng || 73.8600,
+          to_lat: a.target_lat || zone?.center_lat || 18.5300,
+          to_lng: a.target_lng || zone?.center_lng || 73.8600,
           resource_name: a.resource_name || 'Emergency Aid',
           quantity: a.quantity,
           status: a.status,
@@ -300,8 +300,16 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
                         {alloc.quantity} {alloc.resource_name || 'Emergency Aid'}
                       </span>
                     </div>
-                    <div className="text-xs text-slate-600 font-medium">
-                      Destination: <strong className="text-slate-800">{alloc.zone_name || `Zone #${alloc.zone_id}`}</strong>
+                    <div className="text-xs text-slate-600 font-medium flex items-center gap-1.5 flex-wrap">
+                      <span>Destination:</span>
+                      {alloc.report_id ? (
+                        <span className="px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-800 font-extrabold text-[11px] flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3 text-rose-600" />
+                          <span>Direct SOS Report #{alloc.report_id}</span>
+                        </span>
+                      ) : (
+                        <strong className="text-slate-800">{alloc.zone_name || `Zone #${alloc.zone_id}`}</strong>
+                      )}
                     </div>
                   </div>
 
