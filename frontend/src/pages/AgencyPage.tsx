@@ -226,7 +226,7 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
           />
 
           {/* Floating Unit Status */}
-          <div className="absolute top-4 left-4 z-[1000] bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 p-4 shadow-xl max-w-sm space-y-2">
+          <div className="absolute top-4 left-4 z-20 bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 p-4 shadow-xl max-w-sm space-y-2">
             <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
               <span className={`w-3 h-3 rounded-full ${activeAgency.badgeColor}`} />
               <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { TacticalMapProps } from './types';
 import {
@@ -14,6 +14,14 @@ import {
   getSavedZoneCenterLeafletIcon,
 } from './markerIcons';
 
+
+import { fetchRoadRoute } from './routeService';
+
+interface ResolvedLeafletSupplyLine {
+  allocation_id: number;
+  status: string;
+  path: Array<[number, number]>;
+}
 
 export const LeafletMapEngine: React.FC<TacticalMapProps> = ({
   center = DEFAULT_MAP_CENTER,
@@ -32,6 +40,52 @@ export const LeafletMapEngine: React.FC<TacticalMapProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
+
+  // Resolved Real-World Road Routes for Leaflet
+  const [resolvedSupplyLines, setResolvedSupplyLines] = useState<ResolvedLeafletSupplyLine[]>([]);
+
+  useEffect(() => {
+    if (!activeLayers.supplyLines || supplyLines.length === 0) {
+      setResolvedSupplyLines([]);
+      return;
+    }
+
+    let isMounted = true;
+
+    // Collect all active hazard locations (disaster zones and SOS reports)
+    const activeHazards = [
+      ...zones.map((z) => ({ lat: z.center_lat, lng: z.center_lng })),
+      ...reports.map((r) => ({ lat: r.lat, lng: r.lng })),
+    ];
+
+    const resolveRoutes = async () => {
+      const resolved = await Promise.all(
+        supplyLines.map(async (line) => {
+          const waypoints = await fetchRoadRoute(
+            line.from_lat,
+            line.from_lng,
+            line.to_lat,
+            line.to_lng,
+            activeHazards
+          );
+          return {
+            allocation_id: line.allocation_id,
+            status: line.status,
+            path: waypoints.map((pt) => [pt.lat, pt.lng] as [number, number]),
+          };
+        })
+      );
+
+      if (isMounted) {
+        setResolvedSupplyLines(resolved);
+      }
+    };
+
+    resolveRoutes();
+    return () => {
+      isMounted = false;
+    };
+  }, [supplyLines, activeLayers.supplyLines, zones, reports]);
 
   // Layer groups
   const zonesLayerRef = useRef<L.LayerGroup>(L.layerGroup());
@@ -276,29 +330,36 @@ export const LeafletMapEngine: React.FC<TacticalMapProps> = ({
     });
   }, [reports, activeLayers.reports]);
 
-  // 6. Render Supply Lines
+  // 6. Render Supply Lines (Animated Moving Dotted Vectors along Real-World Roads)
   useEffect(() => {
     supplyLinesLayerRef.current.clearLayers();
-    if (!activeLayers.supplyLines) return;
+    if (!activeLayers.supplyLines || resolvedSupplyLines.length === 0) return;
 
-    supplyLines.forEach((line) => {
+    resolvedSupplyLines.forEach((line) => {
       const isEnRoute = line.status === 'en_route';
-      const polyline = L.polyline(
-        [
-          [line.from_lat, line.from_lng],
-          [line.to_lat, line.to_lng],
-        ],
-        {
-          color: isEnRoute ? '#0284C7' : '#059669',
-          weight: 3.5,
-          dashArray: isEnRoute ? '6, 8' : undefined,
-          opacity: 0.85,
-          interactive: false,
-        }
-      );
-      supplyLinesLayerRef.current.addLayer(polyline);
+      const color = isEnRoute ? '#0284C7' : '#10B981';
+
+      // A. Translucent Background Guide Track along actual roads
+      const track = L.polyline(line.path, {
+        color: color,
+        weight: 3.5,
+        opacity: 0.3,
+        interactive: false,
+      });
+      supplyLinesLayerRef.current.addLayer(track);
+
+      // B. Animated Moving Dotted Stream along actual road curves
+      const flowLine = L.polyline(line.path, {
+        color: color,
+        weight: 4.5,
+        opacity: 0.95,
+        dashArray: '8, 12',
+        className: isEnRoute ? 'animated-supply-line-enroute' : 'animated-supply-line-flow',
+        interactive: false,
+      });
+      supplyLinesLayerRef.current.addLayer(flowLine);
     });
-  }, [supplyLines, activeLayers.supplyLines]);
+  }, [resolvedSupplyLines, activeLayers.supplyLines]);
 
   return (
     <div

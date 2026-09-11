@@ -52,7 +52,7 @@ export const NewSosModal: React.FC<NewSosModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
       <div className="w-full max-w-lg bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden font-sans">
         {/* Header */}
         <div className="px-6 py-5 bg-rose-50 border-b border-rose-100 flex items-center justify-between">

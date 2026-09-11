@@ -594,7 +594,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 
           {/* Selected Zone Quick Float Drawer */}
           {selectedZone && (
-            <div className="absolute bottom-5 left-5 z-[1000] max-w-sm w-full bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 p-4 shadow-2xl animate-in slide-in-from-bottom-2">
+            <div className="absolute bottom-5 left-5 z-20 max-w-sm w-full bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200 p-4 shadow-2xl animate-in slide-in-from-bottom-2">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-rose-500" />

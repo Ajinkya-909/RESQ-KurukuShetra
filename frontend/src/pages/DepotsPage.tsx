@@ -753,7 +753,7 @@ export const DepotsPage: React.FC<DepotsPageProps> = ({
 
       {/* 6. Register New Hub Modal */}
       {isAddDepotOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
           <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200 shadow-2xl p-7 space-y-6">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div>
