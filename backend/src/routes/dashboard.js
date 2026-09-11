@@ -45,7 +45,17 @@ router.get('/', async (req, res, next) => {
       // Active SOS reports (Red Dots)
       prisma.report.findMany({
         where: { scenario_id: scenarioId, NOT: { verification_status: 'rejected' } },
-        select: { report_id: true, lat: true, lng: true, severity_signal: true, verification_status: true, created_at: true, raw_text: true, zone: { select: { name: true } } },
+        select: {
+          report_id: true, lat: true, lng: true, severity_signal: true, verification_status: true, created_at: true, raw_text: true,
+          zone: { select: { name: true } },
+          allocations: {
+            where: { status: 'proposed' },
+            include: {
+              helping_point: { select: { name: true } },
+              resource_type: { select: { name: true } },
+            },
+          },
+        },
         orderBy: { severity_signal: 'desc' },
       }),
 
@@ -67,6 +77,7 @@ router.get('/', async (req, res, next) => {
           helping_point: { select: { name: true } },
           zone:          { select: { name: true } },
           resource_type: { select: { name: true } },
+          report:        { select: { report_id: true, raw_text: true } },
           audit_log:     { orderBy: { created_at: 'desc' }, take: 1, select: { reasoning_text: true } },
         },
         orderBy: { created_at: 'desc' },
@@ -218,6 +229,12 @@ router.get('/', async (req, res, next) => {
         verification_status: r.verification_status,
         created_at: r.created_at,
         zone_name: r.zone?.name ?? null,
+        pending_allocations: (r.allocations || []).map((a) => ({
+          allocation_id: a.allocation_id,
+          point_name:    a.helping_point.name,
+          resource_name: a.resource_type.name,
+          quantity:      a.quantity,
+        })),
       })),
       supply_lines: supplyLines.map((a) => ({
         allocation_id: a.allocation_id,
@@ -233,7 +250,11 @@ router.get('/', async (req, res, next) => {
         zone_name:    a.zone.name,
         resource_name: a.resource_type.name,
         quantity:     a.quantity,
-        reasoning:    a.audit_log[0]?.reasoning_text ?? `OR-Tools solver selected ${a.helping_point.name} to deliver ${a.quantity} ${a.resource_type.name} to ${a.zone.name} based on proximity and severity weighting.`,
+        report_id:    a.report_id ?? null,
+        report_text:  a.report?.raw_text ?? null,
+        target_lat:   a.target_lat,
+        target_lng:   a.target_lng,
+        reasoning:    a.audit_log[0]?.reasoning_text ?? `OR-Tools solver selected ${a.helping_point.name} to deliver ${a.quantity} ${a.resource_type.name} to ${a.zone.name}${a.report_id ? ` for SOS Report #${a.report_id}` : ''}.`,
       })),
       audit_logs: auditLogs.map((l) => ({
         log_id: l.log_id,
