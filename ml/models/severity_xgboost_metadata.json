@@ -1,0 +1,123 @@
+{
+  "model_name": "xgboost_severity_agent",
+  "model_version": "1.0.0",
+  "training_date": "2026-09-11T17:48:03.366840",
+  "dataset_path": "ml/data/raw/disaster_severity_dataset.csv",
+  "total_samples": 10000,
+  "feature_names": [
+    "affected_population",
+    "stranded_people",
+    "water_level",
+    "hospital_occupancy",
+    "medical_cases",
+    "road_blocked",
+    "sos_count",
+    "shelter_occupancy",
+    "food_shortage_ratio",
+    "water_shortage_ratio",
+    "disaster_duration_hours",
+    "population_vulnerability"
+  ],
+  "metrics": {
+    "mae": 0.03285585590631083,
+    "rmse": 0.04108865354182116,
+    "r2": 0.9337926407703394,
+    "confusion_matrix": [
+      [
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        166,
+        42,
+        0
+      ],
+      [
+        0,
+        24,
+        620,
+        64
+      ],
+      [
+        0,
+        0,
+        72,
+        512
+      ]
+    ],
+    "classification_report": {
+      "LOW": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1-score": 0.0,
+        "support": 0.0
+      },
+      "MODERATE": {
+        "precision": 0.8736842105263158,
+        "recall": 0.7980769230769231,
+        "f1-score": 0.8341708542713567,
+        "support": 208.0
+      },
+      "HIGH": {
+        "precision": 0.8446866485013624,
+        "recall": 0.8757062146892656,
+        "f1-score": 0.8599167822468793,
+        "support": 708.0
+      },
+      "CRITICAL": {
+        "precision": 0.8888888888888888,
+        "recall": 0.8767123287671232,
+        "f1-score": 0.8827586206896552,
+        "support": 584.0
+      },
+      "accuracy": 0.8653333333333333,
+      "macro avg": {
+        "precision": 0.6518149369791417,
+        "recall": 0.637623866633328,
+        "f1-score": 0.6442115643019728,
+        "support": 1500.0
+      },
+      "weighted avg": {
+        "precision": 0.8659170493596997,
+        "recall": 0.8653333333333333,
+        "f1-score": 0.8652397693346608,
+        "support": 1500.0
+      }
+    }
+  },
+  "feature_importances": {
+    "stranded_people": 0.37284553050994873,
+    "sos_count": 0.2021922767162323,
+    "medical_cases": 0.16200661659240723,
+    "hospital_occupancy": 0.11024302244186401,
+    "road_blocked": 0.07233915477991104,
+    "water_level": 0.029729805886745453,
+    "affected_population": 0.018212895840406418,
+    "population_vulnerability": 0.0099179083481431,
+    "water_shortage_ratio": 0.007527537643909454,
+    "shelter_occupancy": 0.006600276567041874,
+    "food_shortage_ratio": 0.006319105625152588,
+    "disaster_duration_hours": 0.0020658979192376137
+  },
+  "severity_thresholds": {
+    "LOW": [
+      0.0,
+      0.24
+    ],
+    "MODERATE": [
+      0.25,
+      0.49
+    ],
+    "HIGH": [
+      0.5,
+      0.74
+    ],
+    "CRITICAL": [
+      0.75,
+      1.0
+    ]
+  }
+}
