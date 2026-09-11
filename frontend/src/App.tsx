@@ -118,8 +118,8 @@ export function App() {
 
       {/* 3. Main View Area (Strict 100vh when in Setup, Dashboard, or Agency) */}
       <main
-        className={`flex-1 w-full ${
-          route.name === 'setup' || route.name === 'dashboard' || route.name === 'agency'
+        className={`flex-1 w-full min-h-0 ${
+          route.name === 'setup'
             ? 'overflow-hidden'
             : 'overflow-y-auto'
         }`}
