@@ -148,14 +148,8 @@ def adapt_zones_for_allocation(
 ) -> List[Dict[str, Any]]:
     """
     Convert DB zone rows into the format expected by optimizer.py.
-    If zones have zone_needs data, use those. Otherwise, estimate from population × severity.
-
-    Input (from Node.js):
-      { zone_id, name, center_lat, center_lng, radius_m, severity_level, severity_score,
-        population_estimate, zone_needs?: [...] }
-
-    Output (for optimizer):
-      { zone_id: str, severity_score: float, needs: { resource_name: quantity } }
+    If zones have zone_needs data with positive shortages, use those.
+    Otherwise, fall back to estimating needs from population × severity heuristic.
     """
     adapted: List[Dict[str, Any]] = []
 
@@ -181,10 +175,11 @@ def adapt_zones_for_allocation(
                 shortage = max(0.0, needed - fulfilled)
                 if shortage > 0:
                     needs[res_name] = round(shortage, 2)
-        else:
-            # No zone_needs data — estimate from population × severity heuristic
+
+        # Fall back to population x severity estimate if zone_needs produced no positive shortages
+        if not needs:
             needs = estimate_initial_needs(
-                population=max(population, 100),  # Minimum 100 to avoid empty needs
+                population=max(population, 100),
                 severity_level=sev_level,
                 disaster_type=disaster_type,
                 resource_names=resource_names,
@@ -225,7 +220,7 @@ def build_severity_features_from_zone(
     return {
         "affected_population": min(population, 1_000_000),
         "stranded_people": min(stranded, 100_000),
-        "water_level": min(sev_score, 1.0),  # Use severity as water_level proxy
+        "water_level": min(sev_score, 1.0),
         "hospital_occupancy": min(sev_score * 0.8, 1.0),
         "medical_cases": min(medical, 50_000),
         "road_blocked": 1.0 if sev_score >= 0.7 else 0.0,
@@ -233,9 +228,47 @@ def build_severity_features_from_zone(
         "shelter_occupancy": min(sev_score * 0.6, 1.0),
         "food_shortage_ratio": min(sev_score * 0.5, 1.0),
         "water_shortage_ratio": min(sev_score * 0.6, 1.0),
-        "disaster_duration_hours": 0.0,  # Will be set by caller if known
+        "disaster_duration_hours": 0.0,
         "population_vulnerability": min(sev_score * 0.7, 1.0),
     }
+
+
+def build_resource_name_map(
+    helping_points: List[Dict[str, Any]]
+) -> Dict[str, int]:
+    """
+    Build a robust resource_name → resource_id lookup from helping point inventory data.
+    Includes case-insensitive and standard synonym mapping.
+    """
+    name_to_id: Dict[str, int] = {}
+    for pt in helping_points:
+        for inv_row in pt.get("inventory", []):
+            res_id = inv_row.get("resource_id")
+            res_name = (
+                inv_row.get("resource_name")
+                or (inv_row.get("resource_type", {}) or {}).get("name")
+            )
+            if res_id is not None and res_name:
+                res_id_int = int(res_id)
+                name_to_id[res_name] = res_id_int
+                name_to_id[res_name.lower()] = res_id_int
+                
+                lower_name = res_name.lower()
+                if "water" in lower_name:
+                    name_to_id["water"] = res_id_int
+                if "food" in lower_name:
+                    name_to_id["food"] = res_id_int
+                if "medical" in lower_name:
+                    name_to_id["medical"] = res_id_int
+                if "rescue" in lower_name and "boat" not in lower_name:
+                    name_to_id["rescue_team"] = res_id_int
+                if "boat" in lower_name:
+                    name_to_id["rescue_boat"] = res_id_int
+                if "ambulance" in lower_name:
+                    name_to_id["ambulance"] = res_id_int
+                if "shelter" in lower_name or "tent" in lower_name:
+                    name_to_id["shelter"] = res_id_int
+    return name_to_id
 
 
 def map_allocations_to_db_format(
@@ -248,20 +281,18 @@ def map_allocations_to_db_format(
     """
     Convert OR-Tools optimizer output back into DB-shaped allocation rows
     that can be inserted via Prisma createMany.
-
-    Output row format:
-      { zone_id: int, point_id: int, resource_id: int, quantity: float,
-        target_lat: float, target_lng: float }
     """
-    # Build lookup maps
     zone_meta = {str(z["zone_id"]): z for z in adapted_zones}
     point_meta = {str(p["helping_point_id"]): p for p in adapted_points}
 
     db_allocations: List[Dict[str, Any]] = []
 
-    # If triggering report exists with valid GPS coordinates, target the exact micro-SOS pin
     report_lat = (report.get("lat") if report.get("lat") is not None else report.get("latitude")) if report else None
     report_lng = (report.get("lng") if report.get("lng") is not None else report.get("longitude")) if report else None
+    report_zone_id = str(report.get("zone_id")) if report and report.get("zone_id") is not None else None
+
+    # Fallback resource ID if mapping misses
+    fallback_res_id = next(iter(resource_name_to_id.values()), 1) if resource_name_to_id else 1
 
     for alloc in optimizer_result.get("allocations", []):
         z_id = str(alloc["zone_id"])
@@ -273,22 +304,33 @@ def map_allocations_to_db_format(
             continue
 
         z_meta = zone_meta.get(z_id, {})
-        hp_meta = point_meta.get(hp_id, {})
 
-        # Micro-SOS allocation targets report coordinates; Macro allocation targets zone center
-        target_lat = report_lat if report_lat is not None else z_meta.get("_center_lat", 0.0)
-        target_lng = report_lng if report_lng is not None else z_meta.get("_center_lng", 0.0)
+        # Resolve valid resource_id
+        res_id = (
+            resource_name_to_id.get(res_name)
+            or resource_name_to_id.get(res_name.lower())
+            or fallback_res_id
+        )
+
+        # Micro-SOS allocation targets report coordinates if matching zone, else zone center
+        if report_lat is not None and report_lng is not None and report_zone_id is not None and z_id == report_zone_id:
+            target_lat = report_lat
+            target_lng = report_lng
+        else:
+            target_lat = z_meta.get("_center_lat", 0.0)
+            target_lng = z_meta.get("_center_lng", 0.0)
 
         db_allocations.append({
             "zone_id": int(z_id) if z_id.isdigit() else 0,
             "point_id": int(hp_id) if hp_id.isdigit() else 0,
-            "resource_id": resource_name_to_id.get(res_name, 0),
+            "resource_id": int(res_id),
             "quantity": round(qty, 2),
             "target_lat": target_lat,
             "target_lng": target_lng,
         })
 
     return db_allocations
+
 
 
 def build_zone_needs_updates(

@@ -106,7 +106,7 @@ export const GoogleMapEngine: React.FC<TacticalMapProps> = ({
     let lastStamp = performance.now();
 
     const loop = (now: number) => {
-      if (now - lastStamp > 40) {
+      if (now - lastStamp > 500) {
         setLineAnimOffset((prev) => (prev + 1) % 20);
         lastStamp = now;
       }
@@ -217,10 +217,7 @@ export const GoogleMapEngine: React.FC<TacticalMapProps> = ({
     }
   }, [tempZone, mapReady]);
 
-  // Console diagnostic for map rendering verification
-  useEffect(() => {
-    console.log(`🗺️ [GoogleMapEngine] Render cycle -> Zones: ${zones.length}, Depots/HelpingPoints: ${helpingPoints.length}, Reports: ${reports.length}, SupplyLines: ${supplyLines.length}, mapReady: ${mapReady}`);
-  }, [zones.length, helpingPoints.length, reports.length, supplyLines.length, mapReady]);
+
 
   // 2. MANAGE SAVED ZONES (Synchronously Remove Circles on Deletion)
   useEffect(() => {

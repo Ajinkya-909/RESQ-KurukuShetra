@@ -147,10 +147,7 @@ export const LeafletMapEngine: React.FC<TacticalMapProps> = ({
     };
   }, []);
 
-  // Diagnostic logging for map rendering verification
-  useEffect(() => {
-    console.log(`🗺️ [LeafletMapEngine] Render cycle -> Zones: ${zones.length}, Depots/HelpingPoints: ${helpingPoints.length}, Reports: ${reports.length}, SupplyLines: ${supplyLines.length}`);
-  }, [zones.length, helpingPoints.length, reports.length, supplyLines.length]);
+
 
   // Update center when prop changes
   useEffect(() => {

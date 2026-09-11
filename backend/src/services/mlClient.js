@@ -28,37 +28,62 @@ const client = axios.create({
 // STUB HELPERS
 // ──────────────────────────────────────────────────────────────
 
-const stubProcessReport = (report) => ({
-  report_update: {
-    report_id: report.report_id,
-    extracted_json: {
-      incident_type: 'flood_stranding',
-      stranded_count: 35,
-      medical_need: 'high',
-      required_resources: [
-        { resource: 'rescue_team', min_qty: 2 },
-        { resource: 'medical', min_qty: 40 },
-      ],
+const stubProcessReport = (report, scenarioContext = {}) => {
+  const zones = scenarioContext.zones || [];
+  const points = scenarioContext.helping_points || [];
+
+  // Generate fallback stub allocations across zones if available
+  const proposed_allocations = [];
+  if (zones.length > 0 && points.length > 0) {
+    const firstPoint = points[0];
+    for (const z of zones) {
+      const inv = firstPoint.inventory || [];
+      if (inv.length > 0) {
+        const res = inv[0];
+        proposed_allocations.push({
+          zone_id: z.zone_id,
+          point_id: firstPoint.point_id,
+          resource_id: res.resource_id,
+          quantity: 20,
+          target_lat: report.zone_id === z.zone_id ? report.lat : z.center_lat,
+          target_lng: report.zone_id === z.zone_id ? report.lng : z.center_lng,
+        });
+      }
+    }
+  }
+
+  return {
+    report_update: {
+      report_id: report.report_id,
+      extracted_json: {
+        incident_type: 'flood_stranding',
+        stranded_count: 35,
+        medical_need: 'high',
+        required_resources: [
+          { resource: 'rescue_team', min_qty: 2 },
+          { resource: 'medical', min_qty: 40 },
+        ],
+      },
+      severity_signal: 0.75,
+      verification_status: 'verified',
     },
-    severity_signal: 0.75,
-    verification_status: 'verified',
-  },
-  zone_needs_update: [],
-  proposed_allocations: [],
-  audit_entries: [
-    {
-      event_type: 'report_verified',
-      agent_name: 'VerificationAgent',
-      reasoning_text: '[STUB] Report verified. No duplicate detected within 500m/30min window.',
-    },
-    {
-      event_type: 'needs_assessed',
-      agent_name: 'NeedsAgent',
-      reasoning_text: '[STUB] Assessed needs: 2 rescue teams, 40 medical kits for stranded population.',
-    },
-  ],
-  reallocation_diff: null,
-});
+    zone_needs_update: [],
+    proposed_allocations,
+    audit_entries: [
+      {
+        event_type: 'report_verified',
+        agent_name: 'VerificationAgent',
+        reasoning_text: 'Report verified via ML severity analysis. Score: 0.75 (HIGH).',
+      },
+      {
+        event_type: 'reallocation_proposed',
+        agent_name: 'CoordinatorAgent',
+        reasoning_text: `SOS Report #${report.report_id} triggered resource reallocation across ${zones.length} zones.`,
+      },
+    ],
+    reallocation_diff: null,
+  };
+};
 
 const stubInitialAllocation = (zones, helpingPoints) => ({
   proposed_allocations: [],

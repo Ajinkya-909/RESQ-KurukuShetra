@@ -132,7 +132,7 @@ def analyze_disaster_intelligence(request: IntelligenceAnalyzeRequest) -> Dict[s
 @app.post("/ml/process-report", tags=["Node Integration"])
 def process_report(body: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Process an incoming SOS field report.
+    Process an incoming SOS field report and trigger global resource reallocation.
     Called by Node.js mlClient.processReport().
 
     Input from Node:
@@ -151,10 +151,17 @@ def process_report(body: Dict[str, Any]) -> Dict[str, Any]:
         helping_points = ctx.get("helping_points", [])
         report_zone_id = report.get("zone_id")
 
+        print(f"\n🚨 [ML Service] Processing Report #{report.get('report_id')} (Zone: {report_zone_id})")
+        print(f"   Text: \"{report.get('raw_text')}\"")
+
         # 1. Build severity features from the report's zone context
         matching_zone = next(
             (z for z in zones if z.get("zone_id") == report_zone_id), None
         )
+        if not matching_zone and zones:
+            matching_zone = zones[0]
+            report_zone_id = matching_zone.get("zone_id")
+
         zone_for_features = matching_zone or {
             "population_estimate": 1000,
             "severity_score": 0.5,
@@ -162,7 +169,7 @@ def process_report(body: Dict[str, Any]) -> Dict[str, Any]:
 
         features = build_severity_features_from_zone(zone_for_features, [report])
 
-        # 2. Predict severity
+        # 2. Predict severity score and level for report
         try:
             severity_result = predict_severity(features)
         except Exception:
@@ -175,44 +182,61 @@ def process_report(body: Dict[str, Any]) -> Dict[str, Any]:
         raw_text = (report.get("raw_text") or "").lower()
         extracted = extract_report_entities(raw_text)
 
-        # 4. If report is in a zone, compute allocations for that zone
-        proposed_allocations: List[Dict[str, Any]] = []
-        if matching_zone and helping_points:
-            # Build resource name → id mapping
-            res_name_to_id = build_resource_name_map(helping_points)
+        # Build emergency extra needs from the SOS report
+        sos_extra_needs: Dict[str, float] = {}
+        stranded = float(extracted.get("stranded_count", 0) or 0)
+        medical_need = extracted.get("medical_need", "unknown")
 
-            # Estimate needs for the zone based on extracted info
-            population = int(matching_zone.get("population_estimate", 500))
-            zone_needs = estimate_initial_needs(
-                population=max(population, 100),
-                severity_level=severity_level.lower(),
-                disaster_type=matching_zone.get("disaster_type", "flood"),
+        if stranded > 0:
+            sos_extra_needs["water"] = round(stranded * 3.0, 2)
+            sos_extra_needs["food"] = round(stranded * 0.5, 2)
+            sos_extra_needs["shelter"] = round(max(1.0, stranded * 0.05), 2)
+            sos_extra_needs["rescue_team"] = round(max(1.0, stranded * 0.01), 2)
+        if medical_need in ["high", "moderate"]:
+            sos_extra_needs["medical"] = 20.0 if medical_need == "high" else 10.0
+            sos_extra_needs["ambulance"] = 2.0 if medical_need == "high" else 1.0
+
+        print(f"   ML Severity Score: {severity_score:.2f} ({severity_level}) | SOS Extra Needs: {sos_extra_needs}")
+
+        # Update matching zone's severity if new SOS signal is higher
+        if matching_zone:
+            matching_zone["severity_score"] = max(
+                float(matching_zone.get("severity_score", 0.0)), severity_score, 0.75
             )
+            matching_zone["severity_level"] = severity_level.lower()
 
-            # Scale down needs since this is incremental (per-report), not full zone needs
-            scaled_needs = {k: round(v * 0.3, 2) for k, v in zone_needs.items()}
+        # 4. Global Reallocation across ALL zones using available inventory
+        proposed_allocations: List[Dict[str, Any]] = []
+        res_name_to_id = build_resource_name_map(helping_points)
+        disaster_type = zones[0].get("disaster_type", "flood") if zones else "flood"
 
-            adapted_zones = [{
-                "zone_id": str(report_zone_id),
-                "severity_score": severity_score,
-                "needs": scaled_needs,
-                "_center_lat": matching_zone.get("center_lat", report.get("lat", 0)),
-                "_center_lng": matching_zone.get("center_lng", report.get("lng", 0)),
-                "_name": matching_zone.get("name"),
-                "_population": population,
-                "_severity_level": severity_level.lower(),
-            }]
+        adapted_zones = adapt_zones_for_allocation(
+            zones,
+            resource_names=list(res_name_to_id.keys()) if res_name_to_id else None,
+            disaster_type=disaster_type,
+        )
 
-            adapted_points = adapt_helping_points_for_allocation(helping_points)
+        # Inject SOS report emergency needs into target zone in adapted_zones
+        if report_zone_id is not None and adapted_zones:
+            target_z = next((az for az in adapted_zones if str(az["zone_id"]) == str(report_zone_id)), None)
+            if target_z:
+                target_z["severity_score"] = max(float(target_z.get("severity_score", 0.0)), 0.85)
+                for res_n, extra_q in sos_extra_needs.items():
+                    target_z["needs"][res_n] = round(target_z["needs"].get(res_n, 0.0) + extra_q, 2)
 
-            if adapted_points and scaled_needs:
-                try:
-                    opt_result = optimize_allocations(adapted_zones, adapted_points)
-                    proposed_allocations = map_allocations_to_db_format(
-                        opt_result, adapted_zones, adapted_points, res_name_to_id, report
-                    )
-                except Exception as opt_err:
-                    print(f"⚠️ Optimizer warning: {opt_err}")
+        adapted_points = adapt_helping_points_for_allocation(helping_points)
+
+        print(f"   Adapted {len(adapted_zones)} zones & {len(adapted_points)} depots for OR-Tools solve")
+
+        if adapted_zones and adapted_points:
+            try:
+                opt_result = optimize_allocations(adapted_zones, adapted_points)
+                proposed_allocations = map_allocations_to_db_format(
+                    opt_result, adapted_zones, adapted_points, res_name_to_id, report
+                )
+                print(f"✅ [ML Service] OR-Tools Solver status: {opt_result.get('status')} -> Generated {len(proposed_allocations)} proposed allocations")
+            except Exception as opt_err:
+                print(f"❌ [ML Service] Reallocation Optimizer failed: {opt_err}")
 
         # 5. Build audit trail
         audit_entries = [
@@ -220,7 +244,13 @@ def process_report(body: Dict[str, Any]) -> Dict[str, Any]:
                 "event_type": "report_verified",
                 "agent_name": "VerificationAgent",
                 "reasoning_text": f"Report verified via ML severity analysis. Score: {severity_score:.2f} ({severity_level}). "
-                    + (f"Matched to zone {report_zone_id}." if report_zone_id else "No enclosing zone found."),
+                    + (f"Assigned to zone {report_zone_id}." if report_zone_id else "No enclosing zone found."),
+            },
+            {
+                "event_type": "reallocation_proposed",
+                "agent_name": "CoordinatorAgent",
+                "reasoning_text": f"SOS Report #{report.get('report_id')} triggered global resource reallocation. "
+                    + f"Cleared stale proposals and computed {len(proposed_allocations)} new allocation proposals using OR-Tools.",
             },
         ]
 
@@ -230,8 +260,7 @@ def process_report(body: Dict[str, Any]) -> Dict[str, Any]:
                 "agent_name": "NeedsAgent",
                 "reasoning_text": f"Extracted: {extracted.get('stranded_count', 0)} stranded, "
                     + f"medical need: {extracted.get('medical_need', 'unknown')}, "
-                    + f"incident: {extracted.get('incident_type', 'unclassified')}. "
-                    + f"Proposed {len(proposed_allocations)} resource allocations.",
+                    + f"incident: {extracted.get('incident_type', 'unclassified')}.",
             })
 
         return {

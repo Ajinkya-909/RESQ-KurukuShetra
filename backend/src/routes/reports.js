@@ -44,7 +44,10 @@ router.post('/', async (req, res, next) => {
     let minDist = Infinity;
     for (const z of zones) {
       const dist = haversineDistance(lat, lng, z.center_lat, z.center_lng);
-      if (dist <= z.radius_m && dist < minDist) { minDist = dist; zone_id = z.zone_id; }
+      if (dist < minDist) {
+        minDist = dist;
+        zone_id = z.zone_id;
+      }
     }
 
     const report = await prisma.report.create({
@@ -75,15 +78,56 @@ router.post('/', async (req, res, next) => {
 });
 
 const processReportAsync = async (report, scenarioId) => {
+  console.log(`\n🔄 [Reallocation Engine] Starting reallocation for SOS Report #${report.report_id} in Scenario '${scenarioId}'...`);
+
+  // 1. Delete existing unapproved "proposed" allocations for this scenario
+  const deletedProposals = await prisma.allocation.deleteMany({
+    where: {
+      scenario_id: scenarioId,
+      status: 'proposed',
+    },
+  });
+  console.log(`🧹 [Reallocation Engine] Cleared ${deletedProposals.count} stale unapproved 'proposed' allocation(s)`);
+
+  // 2. Fetch updated zones, helping points with inventory, and committed allocations
   const [zones, helpingPoints, allocations] = await Promise.all([
-    prisma.zone.findMany({ where: { scenario_id: scenarioId } }),
-    prisma.helpingPoint.findMany({ include: { inventory: { include: { resource_type: true } } } }),
-    prisma.allocation.findMany({ where: { scenario_id: scenarioId, status: { in: ['proposed', 'confirmed', 'en_route'] } } }),
+    prisma.zone.findMany({
+      where: { scenario_id: scenarioId },
+      include: {
+        zone_needs: {
+          include: { resource_type: true },
+        },
+      },
+    }),
+    prisma.helpingPoint.findMany({
+      include: {
+        inventory: {
+          include: { resource_type: true },
+        },
+      },
+    }),
+    prisma.allocation.findMany({
+      where: {
+        scenario_id: scenarioId,
+        status: { in: ['confirmed', 'en_route', 'delivered'] },
+      },
+    }),
   ]);
 
-  const mlResult = await mlClient.processReport(report, { scenario_id: scenarioId, zones, helping_points: helpingPoints, current_allocations: allocations });
+  console.log(`📡 [Reallocation Engine] Context: Zones=${zones.length}, Depots=${helpingPoints.length}, Committed Allocations=${allocations.length}`);
 
-  // Update report with ML output
+  // 3. Run ML process report & reallocation solver
+  const mlResult = await mlClient.processReport(report, {
+    scenario_id: scenarioId,
+    zones,
+    helping_points: helpingPoints,
+    current_allocations: allocations,
+  });
+
+  const rawProposed = mlResult.proposed_allocations || [];
+  console.log(`🤖 [Reallocation Engine] ML Solver returned ${rawProposed.length} proposed allocation(s)`);
+
+  // 4. Update report with ML output
   await prisma.report.update({
     where: { report_id: report.report_id },
     data: {
@@ -93,7 +137,7 @@ const processReportAsync = async (report, scenarioId) => {
     },
   });
 
-  // Log audit entries
+  // 5. Log audit entries
   for (const entry of mlResult.audit_entries || []) {
     await prisma.auditLog.create({
       data: {
@@ -107,28 +151,40 @@ const processReportAsync = async (report, scenarioId) => {
     });
   }
 
-  // Insert proposed allocations for micro-SOS report targeting exact SOS pin
-  if ((mlResult.proposed_allocations || []).length > 0) {
-    await prisma.allocation.createMany({
-      data: mlResult.proposed_allocations.map((a) => ({
-        scenario_id: scenarioId,
-        zone_id:     a.zone_id,
-        report_id:   report.report_id,
-        point_id:    a.point_id,
-        resource_id: a.resource_id,
-        quantity:    a.quantity,
-        target_lat:  report.lat,
-        target_lng:  report.lng,
-      })),
-    });
+  // 6. Filter & Insert valid proposed allocations
+  const validAllocations = rawProposed
+    .filter((a) => a.zone_id && a.point_id && a.resource_id > 0 && a.quantity > 0)
+    .map((a) => ({
+      scenario_id: scenarioId,
+      zone_id:     a.zone_id,
+      report_id:   report.report_id,
+      point_id:    a.point_id,
+      resource_id: a.resource_id,
+      quantity:    a.quantity,
+      target_lat:  a.target_lat || report.lat,
+      target_lng:  a.target_lng || report.lng,
+      status:      'proposed',
+    }));
+
+  if (validAllocations.length > 0) {
+    await prisma.allocation.createMany({ data: validAllocations });
+    console.log(`✅ [Reallocation Engine] Successfully inserted ${validAllocations.length} reallocated proposed allocation(s) into database.`);
+  } else {
+    console.warn(`⚠️ [Reallocation Engine] No valid new proposed allocations were generated.`);
   }
 
+  // 7. Broadcast WebSocket updates
   broadcastToScenario(scenarioId, 'report.processed', {
     report_id:                report.report_id,
     extracted_json:           mlResult.report_update.extracted_json,
     severity_signal:          mlResult.report_update.severity_signal,
     verification_status:      mlResult.report_update.verification_status,
-    proposed_allocations_count: (mlResult.proposed_allocations || []).length,
+    proposed_allocations_count: validAllocations.length,
+  });
+
+  broadcastToScenario(scenarioId, 'allocation.reallocated', {
+    reason: `Reallocated resources following SOS Report #${report.report_id}`,
+    proposed_allocations_count: validAllocations.length,
   });
 };
 
