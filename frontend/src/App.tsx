@@ -1,127 +1,177 @@
-import React from 'react';
-import { AppProvider, useApp } from './context/AppContext';
-import { Header } from './components/Header';
-import { Hero } from './components/Hero';
-import { KpiStrip } from './components/KpiStrip';
-import { LiveDisasterMap } from './components/LiveDisasterMap';
-import { LiveUpdates } from './components/LiveUpdates';
-import { ZoneWiseAnalysis } from './components/ZoneWiseAnalysis';
-import { ResourceAvailability } from './components/ResourceAvailability';
-import { AllocationPlan } from './components/AllocationPlan';
-import { ResourceDrawer } from './components/ResourceDrawer';
-import { ReallocationModal } from './components/ReallocationModal';
-import { MissionConflictModal } from './components/MissionConflictModal';
-import { NewEmergencyModal } from './components/NewEmergencyModal';
-import { ZoneDetailModal } from './components/ZoneDetailModal';
-import { AuditLogView } from './components/AuditLogView';
-import { AnalyticsView } from './components/AnalyticsView';
-import { MobileBottomNav } from './components/MobileBottomNav';
-import { Shield, Sparkles, RefreshCw, Layers } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { TopNavBar } from './components/Navigation/TopNavBar';
+import { HomePage } from './pages/HomePage';
+import { SetupPage } from './pages/SetupPage';
+import { DashboardPage } from './pages/DashboardPage';
+import { DepotsPage } from './pages/DepotsPage';
+import { AgencyPage } from './pages/AgencyPage';
+import { useRouter } from './router';
+import { scenariosApi } from './api';
+import { Scenario } from './types';
+import { CheckCircle2 } from 'lucide-react';
 
-const DashboardContent: React.FC = () => {
-  const { activeNavTab, openReallocationModal, openConflictModal, openNewEmergencyModal } = useApp();
-
-  return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col selection:bg-blue-600 selection:text-white pb-16 md:pb-8">
-      {/* Header */}
-      <Header />
-
-      {/* Main View Area based on active navigation tab */}
-      {activeNavTab === 'Analytics' ? (
-        <main className="flex-1">
-          <AnalyticsView />
-        </main>
-      ) : (
-        <main className="flex-1 space-y-2">
-          {/* Hero Banner Section */}
-          <Hero />
-
-          {/* 4 KPI Cards Strip */}
-          <KpiStrip />
-
-          {/* Live Disaster Map (70%) + Live Updates (30%) Section */}
-          <section id="map-container-section" className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-              {/* Map Canvas: 8 columns on large screens (~67-70%) */}
-              <div className="lg:col-span-8">
-                <LiveDisasterMap />
-              </div>
-
-              {/* Live Updates: 4 columns on large screens (~30-33%) */}
-              <div className="lg:col-span-4">
-                <LiveUpdates />
-              </div>
-            </div>
-          </section>
-
-          {/* Zone-wise Analysis Grid (Zone A, B, C, D) */}
-          <ZoneWiseAnalysis />
-
-          {/* Resource Availability (Tabs + 6 Resource Cards) */}
-          <ResourceAvailability />
-
-          {/* Current Resource Allocation Plan (Table + Mobile Cards) */}
-          <AllocationPlan />
-        </main>
-      )}
-
-      {/* Modals & Slide-out Drawers */}
-      <ResourceDrawer />
-      <ReallocationModal />
-      <MissionConflictModal />
-      <NewEmergencyModal />
-      <ZoneDetailModal />
-      <AuditLogView />
-
-      {/* Mobile Bottom Navigation */}
-      <MobileBottomNav />
-
-      {/* Enterprise Footer */}
-      <footer className="mt-12 border-t border-slate-200 bg-white py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
-          <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded bg-blue-600 flex items-center justify-center text-white font-black text-[10px]">
-              R
-            </div>
-            <span className="font-bold text-slate-800">RESQ</span>
-            <span>— Safer People. Smarter Response.</span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-4 text-[11px] font-medium">
-            <button
-              onClick={openNewEmergencyModal}
-              className="text-rose-600 hover:text-rose-700 font-bold transition-colors cursor-pointer"
-            >
-              Simulate Emergency
-            </button>
-            <span className="text-slate-300">•</span>
-            <button
-              onClick={openConflictModal}
-              className="text-amber-600 hover:text-amber-700 font-bold transition-colors cursor-pointer"
-            >
-              Test Conflict Detection
-            </button>
-            <span className="text-slate-300">•</span>
-            <button
-              onClick={openReallocationModal}
-              className="text-blue-600 hover:text-blue-700 font-bold transition-colors cursor-pointer"
-            >
-              Re-run Solver
-            </button>
-            <span className="text-slate-300">•</span>
-            <span>Deterministic Triage Engine v4.2</span>
-          </div>
-        </div>
-      </footer>
-    </div>
-  );
+const DEFAULT_FALLBACK_SCENARIO: Scenario = {
+  scenario_id: 'scn_pune_monsoon',
+  name: 'Pune Flood Relief Corridor',
+  description: 'Urban flood coordination corridor across Sangamwadi, Mula-Mutha river basin, and Yerawada.',
+  disaster_type: 'flood',
+  status: 'setup',
+  sim_time: new Date().toISOString(),
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
 };
 
 export function App() {
+  const { route, navigate } = useRouter();
+  const [activeScenario, setActiveScenario] = useState<Scenario>(DEFAULT_FALLBACK_SCENARIO);
+  const [simulationStartedBanner, setSimulationStartedBanner] = useState<string | null>(null);
+
+  // Load and validate scenario on initial startup or when route params change
+  useEffect(() => {
+    let isMounted = true;
+    const scenarioId = route.params?.scenarioId;
+
+    const loadScenario = async () => {
+      try {
+        if (scenarioId) {
+          const fetched = await scenariosApi.getById(scenarioId);
+          if (isMounted && fetched) {
+            setActiveScenario(fetched);
+            return;
+          }
+        }
+
+        const scenarios = await scenariosApi.list();
+        if (isMounted && scenarios && scenarios.length > 0) {
+          const target = scenarios.find((s) => s.scenario_id === scenarioId) || scenarios[0];
+          setActiveScenario(target);
+        }
+      } catch {
+        // Retain fallback scenario
+      }
+    };
+
+    loadScenario();
+    return () => {
+      isMounted = false;
+    };
+  }, [route.params?.scenarioId]);
+
+  const handleStartSimulation = (scenarioId: string) => {
+    setSimulationStartedBanner(scenarioId);
+    setActiveScenario((prev) => ({ ...prev, status: 'running' }));
+    // URL reflects /dashboard/:scenarioId upon starting simulation
+    navigate(`/dashboard/${scenarioId}`);
+  };
+
+  // Create validated scenario on the backend before routing into Setup Engine
+  const handleNewSession = async () => {
+    try {
+      const created = await scenariosApi.create({
+        name: `Emergency Response Session #${Math.floor(100 + Math.random() * 900)}`,
+        description: 'Multi-depot emergency response corridor and resource triage',
+        disaster_type: 'flood',
+      });
+      if (created?.scenario_id) {
+        setActiveScenario(created);
+        navigate(`/setup/${created.scenario_id}`);
+        return;
+      }
+    } catch (err: any) {
+      console.warn('Backend scenario creation notice:', err.message);
+    }
+
+    // Fallback if backend creates default
+    navigate(`/setup/${activeScenario.scenario_id || 'scn_pune_monsoon'}`);
+  };
+
+  const activeScenarioId = route.params?.scenarioId || activeScenario.scenario_id;
+
   return (
-    <AppProvider>
-      <DashboardContent />
-    </AppProvider>
+    <div className="h-screen w-screen bg-[#f8fafc] text-slate-900 flex flex-col overflow-hidden font-sans selection:bg-blue-600 selection:text-white">
+      {/* 1. Global Navigation Bar with Route-Aware Tabs */}
+      <TopNavBar
+        currentRoute={route.name}
+        onNavigate={navigate}
+        activeScenario={activeScenario}
+        onNewScenarioClick={handleNewSession}
+      />
+
+      {/* 2. Simulation Started Success Notification Banner */}
+      {simulationStartedBanner && (
+        <div className="bg-emerald-600 text-white px-6 py-2.5 text-xs sm:text-sm font-bold flex items-center justify-between shadow-lg shrink-0 animate-in slide-in-from-top duration-200 z-30">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-5 h-5" />
+            <span>
+              Simulation session <strong>{simulationStartedBanner}</strong> is now LIVE and running.
+              Live Command Center active.
+            </span>
+          </div>
+          <button
+            onClick={() => setSimulationStartedBanner(null)}
+            className="text-white hover:text-emerald-100 font-extrabold text-xs sm:text-sm underline cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* 3. Main View Area (Strict 100vh when in Setup, Dashboard, or Agency) */}
+      <main
+        className={`flex-1 w-full ${
+          route.name === 'setup' || route.name === 'dashboard' || route.name === 'agency'
+            ? 'overflow-hidden'
+            : 'overflow-y-auto'
+        }`}
+      >
+        {/* Page 1: Landing / Home */}
+        {route.name === 'home' && (
+          <HomePage
+            onNavigate={navigate}
+            onSelectScenario={(scn) => {
+              setActiveScenario(scn);
+              navigate(`/setup/${scn.scenario_id}`);
+            }}
+          />
+        )}
+
+        {/* Page 2: Zone Setup Engine */}
+        {route.name === 'setup' && (
+          <SetupPage
+            scenarioId={activeScenarioId}
+            initialScenario={activeScenario}
+            onNavigateHome={() => navigate('/')}
+            onStartSimulation={handleStartSimulation}
+            onScenarioUpdated={(scn) => setActiveScenario(scn)}
+          />
+        )}
+
+        {/* Page 3: Live Operations Command Dashboard */}
+        {route.name === 'dashboard' && (
+          <DashboardPage
+            scenarioId={activeScenarioId}
+            onNavigateHome={() => navigate('/')}
+            onOpenSetup={() => navigate(`/setup/${activeScenarioId}`)}
+          />
+        )}
+
+        {/* Page 4: Helping Points & Central Depots */}
+        {route.name === 'depots' && (
+          <DepotsPage
+            onNavigateHome={() => navigate('/')}
+            onNavigateToDashboard={() => navigate(`/dashboard/${activeScenarioId}`)}
+          />
+        )}
+
+        {/* Page 5: Agency Dispatch View */}
+        {route.name === 'agency' && (
+          <AgencyPage
+            onNavigateHome={() => navigate('/')}
+            onNavigateToDashboard={() => navigate(`/dashboard/${activeScenarioId}`)}
+          />
+        )}
+      </main>
+    </div>
   );
 }
 
