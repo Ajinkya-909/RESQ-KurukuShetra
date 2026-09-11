@@ -195,10 +195,16 @@ const RightCommandPanel: React.FC<{
               );
 
               return (
-                <div key={rep.report_id} className="p-4 rounded-2xl bg-rose-50/40 border border-rose-200 space-y-3 shadow-sm">
+                <div key={rep.report_id} className={`p-4 rounded-2xl border space-y-3 shadow-sm ${
+                  rep.verification_status === 'duplicate'
+                    ? 'bg-amber-50/50 border-amber-300'
+                    : 'bg-rose-50/40 border-rose-200'
+                }`}>
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-extrabold text-rose-700 uppercase flex items-center gap-1.5">
-                      <Radio className="w-3.5 h-3.5 text-rose-600 animate-pulse" />
+                    <span className={`font-extrabold uppercase flex items-center gap-1.5 ${
+                      rep.verification_status === 'duplicate' ? 'text-amber-800' : 'text-rose-700'
+                    }`}>
+                      <Radio className={`w-3.5 h-3.5 ${rep.verification_status === 'duplicate' ? 'text-amber-600' : 'text-rose-600 animate-pulse'}`} />
                       <span>SOS #{rep.report_id} {rep.zone_name ? `• ${rep.zone_name}` : ''}</span>
                     </span>
                     <span className="text-[10px] text-slate-400 font-mono">
@@ -209,11 +215,17 @@ const RightCommandPanel: React.FC<{
                   <p className="text-xs font-bold text-slate-800 italic">"{rep.raw_text}"</p>
 
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="px-2.5 py-0.5 rounded-md bg-rose-100 text-rose-800 font-black">
-                      Severity Signal: {((rep.severity_signal || 0.5) * 10).toFixed(1)} / 10
+                    <span className={`px-2.5 py-0.5 rounded-md font-black ${
+                      rep.verification_status === 'duplicate'
+                        ? 'bg-amber-100 text-amber-900'
+                        : 'bg-rose-100 text-rose-800'
+                    }`}>
+                      {rep.verification_status === 'duplicate'
+                        ? '⚠️ Duplicate Cluster Flagged'
+                        : `Severity Signal: ${((rep.severity_signal || 0.5) * 10).toFixed(1)} / 10`}
                     </span>
                     <span className="text-slate-500 font-medium capitalize">
-                      Status: {rep.verification_status || 'verified'}
+                      Status: <strong className={rep.verification_status === 'duplicate' ? 'text-amber-700' : 'text-emerald-700'}>{rep.verification_status || 'verified'}</strong>
                     </span>
                   </div>
 
@@ -222,36 +234,40 @@ const RightCommandPanel: React.FC<{
                     <div className="text-[11px] font-black text-slate-700 uppercase tracking-wider flex items-center justify-between">
                       <span className="flex items-center gap-1">
                         <Package className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Proposed SOS Resource Allocations ({reportProposals.length})</span>
+                        <span>Direct SOS Dispatches ({reportProposals.length})</span>
                       </span>
                     </div>
 
-                    {reportProposals.length === 0 ? (
+                    {rep.verification_status === 'duplicate' ? (
+                      <p className="text-[11px] text-amber-800 font-medium italic bg-amber-50 p-2 rounded-xl border border-amber-200">
+                        Linked to existing incident cluster. Redundant duplicate dispatches suppressed to avoid over-saturating zone.
+                      </p>
+                    ) : reportProposals.length === 0 ? (
                       <p className="text-[11px] text-slate-500 italic">
-                        Processing emergency extra needs or pending next optimization tick...
+                        Allocations approved or dispatched to target coordinates.
                       </p>
                     ) : (
                       reportProposals.map((alloc) => (
                         <div
                           key={alloc.allocation_id}
-                          className="p-2.5 rounded-xl bg-white border border-rose-200 flex items-center justify-between gap-2"
+                          className="p-2.5 rounded-xl bg-white border border-rose-200 flex items-center justify-between gap-2 shadow-2xs"
                         >
                           <div className="text-xs">
                             <span className="font-bold text-slate-900 block">
                               {alloc.quantity} {alloc.resource_name}
                             </span>
                             <span className="text-[10px] text-slate-500">
-                              From: {alloc.point_name} → {alloc.zone_name}
+                              From: <strong>{alloc.point_name}</strong> → <span className="text-rose-700 font-bold">Direct SOS Location</span>
                             </span>
                           </div>
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => handleApprove(alloc.allocation_id)}
                               className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-sm transition-all flex items-center gap-1 cursor-pointer"
-                              title="Approve this resource allocation for SOS report"
+                              title="Approve this direct dispatch for SOS report"
                             >
                               <CheckCircle2 className="w-3 h-3" />
-                              <span>Approve</span>
+                              <span>Dispatch</span>
                             </button>
                             <button
                               onClick={() => handleReject(alloc.allocation_id)}
