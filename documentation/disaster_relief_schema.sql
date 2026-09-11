@@ -87,9 +87,12 @@ CREATE TABLE reports (
 CREATE TABLE allocations (
     allocation_id        SERIAL PRIMARY KEY,
     zone_id               INTEGER NOT NULL REFERENCES zones(zone_id),
+    report_id             INTEGER REFERENCES reports(report_id) ON DELETE SET NULL, -- nullable: links to specific Red Dot SOS report if applicable
     point_id              INTEGER NOT NULL REFERENCES helping_points(point_id),
     resource_id           INTEGER NOT NULL REFERENCES resource_types(resource_id),
     quantity               DOUBLE PRECISION NOT NULL,
+    target_lat            DOUBLE PRECISION,         -- destination coordinate for UI dotted lines (report lat or zone center lat)
+    target_lng            DOUBLE PRECISION,         -- destination coordinate for UI dotted lines (report lng or zone center lng)
     status                 TEXT NOT NULL DEFAULT 'proposed'
                            CHECK (status IN (
                                'proposed','confirmed','on_hold','unfulfilled',
