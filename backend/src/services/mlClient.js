@@ -9,7 +9,7 @@
  * and the functions will call the real FastAPI endpoints.
  */
 
-const axios = require('axios');
+import axios from 'axios';
 
 const ML_BASE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8000';
 const IS_STUB = process.env.ML_STUB !== 'false';
@@ -154,4 +154,5 @@ const healthCheck = async () => {
   }
 };
 
-module.exports = { processReport, initialAllocation, tick, healthCheck };
+export { processReport, initialAllocation, tick, healthCheck };
+export default { processReport, initialAllocation, tick, healthCheck };

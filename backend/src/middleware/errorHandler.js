@@ -89,4 +89,5 @@ const createError = (statusCode, code, message, details = null) => {
   return err;
 };
 
-module.exports = { errorHandler, createError };
+export { errorHandler, createError };
+export default { errorHandler, createError };

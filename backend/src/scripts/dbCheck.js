@@ -3,8 +3,8 @@
  * Run: node src/scripts/dbCheck.js
  */
 
-require('dotenv').config();
-const prisma = require('../config/prisma');
+import 'dotenv/config';
+import prisma from '../config/prisma.js';
 
 const EXPECTED_MODELS = [
   'ResourceType', 'Scenario', 'HelpingPoint',

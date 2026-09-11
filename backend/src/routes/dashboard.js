@@ -3,9 +3,11 @@
  * Aggregated command-center data in a single call.
  */
 
-const router = require('express').Router({ mergeParams: true });
-const prisma = require('../config/prisma');
-const { createError } = require('../middleware/errorHandler');
+import express from 'express';
+import prisma from '../config/prisma.js';
+import { createError } from '../middleware/errorHandler.js';
+
+const router = express.Router({ mergeParams: true });
 
 router.get('/', async (req, res, next) => {
   try {
@@ -147,4 +149,4 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-module.exports = router;
+export default router;

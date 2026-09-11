@@ -2,8 +2,10 @@
  * auditLog.js — /api/scenarios/:scenarioId/audit-log (Prisma ORM)
  */
 
-const router = require('express').Router({ mergeParams: true });
-const prisma = require('../config/prisma');
+import express from 'express';
+import prisma from '../config/prisma.js';
+
+const router = express.Router({ mergeParams: true });
 
 router.get('/', async (req, res, next) => {
   try {
@@ -49,4 +51,4 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-module.exports = router;
+export default router;

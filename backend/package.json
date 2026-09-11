@@ -2,8 +2,10 @@
   "name": "resq-backend",
   "version": "1.0.0",
   "description": "RESQ Disaster Relief — Node.js API Gateway",
+  "type": "module",
   "main": "src/index.js",
   "scripts": {
+    "build": "prisma generate",
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "db:check": "node src/scripts/dbCheck.js"

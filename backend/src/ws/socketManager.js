@@ -5,7 +5,7 @@
  * helper so routes can emit events without importing io directly.
  *
  * Usage in routes:
- *   const { broadcast } = require('../ws/socketManager');
+ *   import { broadcast } from '../ws/socketManager.js';
  *   broadcast('zone.updated', { zone_id: 1, severity_level: 'critical' });
  */
 
@@ -66,4 +66,5 @@ const broadcastToScenario = (scenarioId, event, data) => {
   });
 };
 
-module.exports = { init, broadcast, broadcastToScenario };
+export { init, broadcast, broadcastToScenario };
+export default { init, broadcast, broadcastToScenario };

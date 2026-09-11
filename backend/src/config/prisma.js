@@ -5,7 +5,7 @@
  * In production, a single global instance is created on startup.
  */
 
-const { PrismaClient } = require('@prisma/client');
+import { PrismaClient } from '@prisma/client';
 
 let prisma;
 
@@ -21,4 +21,4 @@ if (process.env.NODE_ENV === 'production') {
   prisma = global._prisma;
 }
 
-module.exports = prisma;
+export default prisma;

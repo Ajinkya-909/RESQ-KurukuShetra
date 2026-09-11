@@ -10,15 +10,15 @@
  *  6. Handle graceful shutdown
  */
 
-require('dotenv').config();
-const http = require('http');
-const { Server: SocketIOServer } = require('socket.io');
+import 'dotenv/config';
+import http from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 
-const app = require('./app');
-const socketManager = require('./ws/socketManager');
+import app from './app.js';
+import * as socketManager from './ws/socketManager.js';
 
 // Connect to database via Prisma
-const prisma = require('./config/prisma');
+import prisma from './config/prisma.js';
 
 const PORT = process.env.PORT || 3001;
 
@@ -90,4 +90,4 @@ process.on('uncaughtException', (err) => {
   shutdown('uncaughtException');
 });
 
-module.exports = server;
+export default server;

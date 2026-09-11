@@ -2,11 +2,13 @@
  * simulation.js — /api/scenarios/:scenarioId/simulation routes (Prisma ORM)
  */
 
-const router = require('express').Router({ mergeParams: true });
-const prisma = require('../config/prisma');
-const { createError } = require('../middleware/errorHandler');
-const { broadcastToScenario } = require('../ws/socketManager');
-const mlClient = require('../services/mlClient');
+import express from 'express';
+import prisma from '../config/prisma.js';
+import { createError } from '../middleware/errorHandler.js';
+import { broadcastToScenario } from '../ws/socketManager.js';
+import mlClient from '../services/mlClient.js';
+
+const router = express.Router({ mergeParams: true });
 
 // ── POST .../simulation/start ────────────────────────────────
 router.post('/start', async (req, res, next) => {
@@ -151,4 +153,4 @@ router.post('/resume', async (req, res, next) => {
   }
 });
 
-module.exports = router;
+export default router;

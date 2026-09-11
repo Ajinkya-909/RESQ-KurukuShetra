@@ -2,11 +2,13 @@
  * reports.js — /api/scenarios/:scenarioId/reports routes (Prisma ORM)
  */
 
-const router = require('express').Router({ mergeParams: true });
-const prisma = require('../config/prisma');
-const { createError } = require('../middleware/errorHandler');
-const { broadcastToScenario } = require('../ws/socketManager');
-const mlClient = require('../services/mlClient');
+import express from 'express';
+import prisma from '../config/prisma.js';
+import { createError } from '../middleware/errorHandler.js';
+import { broadcastToScenario } from '../ws/socketManager.js';
+import mlClient from '../services/mlClient.js';
+
+const router = express.Router({ mergeParams: true });
 
 // Haversine distance in meters
 const haversineDistance = (lat1, lng1, lat2, lng2) => {
@@ -183,4 +185,4 @@ router.get('/:reportId', async (req, res, next) => {
   }
 });
 
-module.exports = router;
+export default router;

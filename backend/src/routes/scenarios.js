@@ -8,11 +8,13 @@
  * DELETE /api/scenarios/:id    → Delete a scenario
  */
 
-const router = require('express').Router();
-const { v4: uuidv4 } = require('uuid');
-const prisma = require('../config/prisma');
-const { createError } = require('../middleware/errorHandler');
-const { broadcastToScenario, broadcast } = require('../ws/socketManager');
+import express from 'express';
+import { v4 as uuidv4 } from 'uuid';
+import prisma from '../config/prisma.js';
+import { createError } from '../middleware/errorHandler.js';
+import { broadcastToScenario, broadcast } from '../ws/socketManager.js';
+
+const router = express.Router();
 
 // ── POST /api/scenarios ──────────────────────────────────────
 router.post('/', async (req, res, next) => {
@@ -120,4 +122,4 @@ router.delete('/:id', async (req, res, next) => {
   }
 });
 
-module.exports = router;
+export default router;

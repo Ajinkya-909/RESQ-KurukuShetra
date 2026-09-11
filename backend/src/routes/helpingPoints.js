@@ -2,10 +2,12 @@
  * helpingPoints.js — /api/helping-points routes (Prisma ORM)
  */
 
-const router = require('express').Router();
-const prisma = require('../config/prisma');
-const { createError } = require('../middleware/errorHandler');
-const { broadcast } = require('../ws/socketManager');
+import express from 'express';
+import prisma from '../config/prisma.js';
+import { createError } from '../middleware/errorHandler.js';
+import { broadcast } from '../ws/socketManager.js';
+
+const router = express.Router();
 
 const INCLUDE_INVENTORY = {
   inventory: {
@@ -164,4 +166,4 @@ router.patch('/:id/inventory', async (req, res, next) => {
   }
 });
 
-module.exports = router;
+export default router;

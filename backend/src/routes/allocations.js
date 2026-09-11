@@ -2,10 +2,12 @@
  * allocations.js — /api/scenarios/:scenarioId/allocations routes (Prisma ORM)
  */
 
-const router = require('express').Router({ mergeParams: true });
-const prisma = require('../config/prisma');
-const { createError } = require('../middleware/errorHandler');
-const { broadcastToScenario } = require('../ws/socketManager');
+import express from 'express';
+import prisma from '../config/prisma.js';
+import { createError } from '../middleware/errorHandler.js';
+import { broadcastToScenario } from '../ws/socketManager.js';
+
+const router = express.Router({ mergeParams: true });
 
 const VALID_TRANSITIONS = {
   proposed:  ['confirmed', 'cancelled', 'on_hold'],
@@ -216,4 +218,4 @@ router.post('/deliver', async (req, res, next) => {
   }
 });
 
-module.exports = router;
+export default router;

@@ -5,22 +5,22 @@
  * Does NOT start the server — that's index.js.
  */
 
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
 
 // Routes
-const scenariosRouter    = require('./routes/scenarios');
-const helpingPointsRouter = require('./routes/helpingPoints');
-const zonesRouter        = require('./routes/zones');
-const reportsRouter      = require('./routes/reports');
-const allocationsRouter  = require('./routes/allocations');
-const dashboardRouter    = require('./routes/dashboard');
-const auditLogRouter     = require('./routes/auditLog');
-const simulationRouter   = require('./routes/simulation');
+import scenariosRouter from './routes/scenarios.js';
+import helpingPointsRouter from './routes/helpingPoints.js';
+import zonesRouter from './routes/zones.js';
+import reportsRouter from './routes/reports.js';
+import allocationsRouter from './routes/allocations.js';
+import dashboardRouter from './routes/dashboard.js';
+import auditLogRouter from './routes/auditLog.js';
+import simulationRouter from './routes/simulation.js';
 
 // Middleware
-const { errorHandler } = require('./middleware/errorHandler');
+import { errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
 
@@ -73,4 +73,4 @@ app.use((_req, res) => {
 // ── Centralized Error Handler ────────────────────────────────
 app.use(errorHandler);
 
-module.exports = app;
+export default app;
