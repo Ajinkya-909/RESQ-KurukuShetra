@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Activity,
   Shield,
@@ -25,6 +25,8 @@ import {
   Sparkles,
   Send,
   MessageSquare,
+  BarChart3,
+  TrendingUp,
 } from 'lucide-react';
 import { TacticalMapWrapper } from '../components/Map';
 import { NewSosModal } from '../components/Modals/NewSosModal';
@@ -48,7 +50,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const [loading, setLoading] = useState(true);
   const [ticking, setTicking] = useState(false);
   const [pausing, setPausing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'allocations' | 'intelligence' | 'reports'>('allocations');
+  const [activeTab, setActiveTab] = useState<'allocations' | 'intelligence' | 'reports' | 'analytics'>('allocations');
   const [isSosModalOpen, setIsSosModalOpen] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -629,7 +631,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         <div className="w-88 sm:w-96 md:w-[460px] bg-white h-full flex flex-col shrink-0 shadow-xl z-10 overflow-hidden">
           {/* Tab Selector Bar */}
           <div className="p-3 border-b border-slate-200 bg-slate-50/80 shrink-0">
-            <div className="grid grid-cols-3 gap-1 bg-slate-200/60 p-1 rounded-xl">
+            <div className="grid grid-cols-4 gap-1 bg-slate-200/60 p-1 rounded-xl">
               <button
                 onClick={() => setActiveTab('allocations')}
                 className={`py-2 rounded-lg text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
@@ -639,7 +641,19 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 }`}
               >
                 <Shield className="w-3.5 h-3.5" />
-                <span>Approvals ({pendingApprovalsCount})</span>
+                <span>Approvals</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('analytics')}
+                className={`py-2 rounded-lg text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  activeTab === 'analytics'
+                    ? 'bg-white text-blue-700 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <BarChart3 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Analytics</span>
               </button>
 
               <button
@@ -651,7 +665,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Agent AI ({auditLogs.length})</span>
+                <span>AI Log</span>
               </button>
 
               <button
@@ -663,7 +677,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 }`}
               >
                 <Radio className="w-3.5 h-3.5 text-rose-600" />
-                <span>SOS Feed ({data?.active_reports?.length || 0})</span>
+                <span>SOS</span>
               </button>
             </div>
           </div>
@@ -853,6 +867,254 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                   </div>
                 ))
               )}
+            </div>
+          )}
+
+          {/* Tab 4: Resource Analytics & Zone Breakdown */}
+          {activeTab === 'analytics' && (
+            <div className="flex-1 overflow-y-auto p-4 space-y-5">
+              {/* Section A: Resource Distribution Overview */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-emerald-600" />
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
+                    Resource Allocation Distribution
+                  </span>
+                </div>
+
+                {(() => {
+                  const resMap: Record<string, { allocated: number; pending: number }> = {};
+                  for (const sl of data?.supply_lines || []) {
+                    const key = sl.resource_name || 'Unknown';
+                    if (!resMap[key]) resMap[key] = { allocated: 0, pending: 0 };
+                    resMap[key].allocated += sl.quantity || 0;
+                  }
+                  for (const pa of data?.pending_approvals || []) {
+                    const key = pa.resource_name || 'Unknown';
+                    if (!resMap[key]) resMap[key] = { allocated: 0, pending: 0 };
+                    resMap[key].pending += pa.quantity || 0;
+                  }
+                  const resEntries = Object.entries(resMap);
+                  const maxQty = Math.max(1, ...resEntries.map(([, v]) => v.allocated + v.pending));
+
+                  if (resEntries.length === 0) {
+                    return (
+                      <div className="p-6 text-center bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                        <Package className="w-6 h-6 text-slate-400 mx-auto" />
+                        <p className="text-xs text-slate-500 font-medium">
+                          No resource allocations yet. Start the simulation and approve allocations to see distribution.
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  const RESOURCE_COLORS: Record<string, string> = {
+                    water: 'bg-blue-500', food: 'bg-amber-500', medical: 'bg-rose-500',
+                    rescue_team: 'bg-emerald-500', ambulance: 'bg-purple-500',
+                    shelter: 'bg-orange-500', rescue_boat: 'bg-cyan-500',
+                  };
+
+                  return (
+                    <div className="space-y-2.5">
+                      {resEntries.map(([name, vals]) => {
+                        const total = vals.allocated + vals.pending;
+                        const pct = Math.round((total / maxQty) * 100);
+                        const barColor = RESOURCE_COLORS[name] || 'bg-indigo-500';
+                        return (
+                          <div key={name} className="space-y-1">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-bold text-slate-700 capitalize">{name.replace('_', ' ')}</span>
+                              <div className="flex items-center gap-2">
+                                {vals.allocated > 0 && (
+                                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                                    {vals.allocated.toLocaleString()} active
+                                  </span>
+                                )}
+                                {vals.pending > 0 && (
+                                  <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
+                                    {vals.pending.toLocaleString()} pending
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                              <div
+                                className={`h-full ${barColor} rounded-full transition-all duration-500`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Divider */}
+              <div className="border-t border-slate-200" />
+
+              {/* Section B: Depot Utilization — Who is giving what */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Truck className="w-4 h-4 text-blue-600" />
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
+                    Depot Contributions
+                  </span>
+                </div>
+
+                {(() => {
+                  const points = data?.helping_points || [];
+                  if (points.length === 0) {
+                    return <p className="text-xs text-slate-400 font-medium">No depot data available.</p>;
+                  }
+
+                  const TYPE_BADGES: Record<string, string> = {
+                    govt: 'bg-blue-100 text-blue-800',
+                    ngo: 'bg-rose-100 text-rose-800',
+                    hospital: 'bg-emerald-100 text-emerald-800',
+                    military: 'bg-amber-100 text-amber-800',
+                    private: 'bg-purple-100 text-purple-800',
+                  };
+
+                  return (
+                    <div className="space-y-2">
+                      {points.map((pt) => (
+                        <div key={pt.point_id} className="p-3 rounded-xl border border-slate-200 bg-slate-50/60 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${TYPE_BADGES[pt.type] || 'bg-slate-100 text-slate-800'}`}>
+                                {pt.type}
+                              </span>
+                              <span className="text-xs font-bold text-slate-800">{pt.name}</span>
+                            </div>
+                            <span className="text-[10px] font-bold text-slate-500">
+                              {pt.active_allocations || 0} convoys
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${
+                                  (pt.utilization_pct || 0) > 70 ? 'bg-rose-500' : (pt.utilization_pct || 0) > 40 ? 'bg-amber-500' : 'bg-emerald-500'
+                                }`}
+                                style={{ width: `${Math.min(100, pt.utilization_pct || 0)}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] font-mono font-bold text-slate-600">
+                              {(pt.utilization_pct || 0).toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Divider */}
+              <div className="border-t border-slate-200" />
+
+              {/* Section C: Per-Zone Resource Breakdown */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-indigo-600" />
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-slate-500">
+                    Zone-Level Resource Status
+                  </span>
+                </div>
+
+                {(() => {
+                  const zones = data?.zones || [];
+                  if (zones.length === 0) {
+                    return <p className="text-xs text-slate-400 font-medium">No zone data available.</p>;
+                  }
+
+                  const SEVERITY_COLORS: Record<string, string> = {
+                    critical: 'bg-rose-600',
+                    high: 'bg-orange-500',
+                    moderate: 'bg-amber-500',
+                    low: 'bg-blue-500',
+                  };
+
+                  return (
+                    <div className="space-y-3">
+                      {zones.map((z) => {
+                        const ns = z.needs_summary;
+                        const totalNeeds = ns?.total_needed || 0;
+                        const shortages = ns?.shortage || 0;
+                        const balanced = ns?.balanced || 0;
+
+                        return (
+                          <div key={z.zone_id} className="p-3.5 rounded-2xl border border-slate-200 bg-white space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-2.5 h-2.5 rounded-full ${SEVERITY_COLORS[z.severity_level] || 'bg-slate-400'}`} />
+                                <span className="text-xs font-black text-slate-900">{z.name}</span>
+                              </div>
+                              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                z.severity_level === 'critical' ? 'bg-rose-100 text-rose-800' :
+                                z.severity_level === 'high' ? 'bg-orange-100 text-orange-800' :
+                                z.severity_level === 'moderate' ? 'bg-amber-100 text-amber-800' :
+                                'bg-blue-100 text-blue-800'
+                              }`}>
+                                {z.severity_level}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2 text-center">
+                              <div className="p-2 rounded-lg bg-slate-50 border border-slate-100">
+                                <div className="text-lg font-black text-slate-900">{z.population_estimate?.toLocaleString() || 0}</div>
+                                <div className="text-[10px] font-bold text-slate-500">Population</div>
+                              </div>
+                              <div className="p-2 rounded-lg bg-rose-50 border border-rose-100">
+                                <div className="text-lg font-black text-rose-700">{shortages}</div>
+                                <div className="text-[10px] font-bold text-rose-600">Shortages</div>
+                              </div>
+                              <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-100">
+                                <div className="text-lg font-black text-emerald-700">{balanced}</div>
+                                <div className="text-[10px] font-bold text-emerald-600">Fulfilled</div>
+                              </div>
+                            </div>
+
+                            {totalNeeds > 0 && (
+                              <div className="space-y-1">
+                                <div className="flex justify-between text-[10px] text-slate-500 font-bold">
+                                  <span>Resource Fulfillment</span>
+                                  <span>{balanced}/{totalNeeds} types covered</span>
+                                </div>
+                                <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                                  <div
+                                    className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-500"
+                                    style={{ width: `${totalNeeds > 0 ? Math.round((balanced / totalNeeds) * 100) : 0}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-[10px] text-slate-500 font-bold">
+                                <span>Severity Score</span>
+                                <span>{((z.severity_score || 0) * 100).toFixed(0)}%</span>
+                              </div>
+                              <div className="h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                                <div
+                                  className={`h-full rounded-full transition-all duration-500 ${
+                                    (z.severity_score || 0) >= 0.75 ? 'bg-rose-500' :
+                                    (z.severity_score || 0) >= 0.5 ? 'bg-orange-500' :
+                                    (z.severity_score || 0) >= 0.25 ? 'bg-amber-500' : 'bg-blue-500'
+                                  }`}
+                                  style={{ width: `${((z.severity_score || 0) * 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           )}
         </div>

@@ -73,7 +73,7 @@ router.post('/', async (req, res, next) => {
 const processReportAsync = async (report, scenarioId) => {
   const [zones, helpingPoints, allocations] = await Promise.all([
     prisma.zone.findMany({ where: { scenario_id: scenarioId } }),
-    prisma.helpingPoint.findMany({ include: { inventory: true } }),
+    prisma.helpingPoint.findMany({ include: { inventory: { include: { resource_type: true } } } }),
     prisma.allocation.findMany({ where: { scenario_id: scenarioId, status: { in: ['proposed', 'confirmed', 'en_route'] } } }),
   ]);
 

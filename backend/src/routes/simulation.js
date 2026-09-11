@@ -46,12 +46,61 @@ router.post('/start', async (req, res, next) => {
     });
 
     // Fire-and-forget initial ML allocation
-    const helpingPoints = await prisma.helpingPoint.findMany({ where: { status: 'active' }, include: { inventory: true } });
+    const helpingPoints = await prisma.helpingPoint.findMany({
+      where: { status: 'active' },
+      include: { inventory: { include: { resource_type: true } } },
+    });
     mlClient.initialAllocation(scenarioId, createdZones, helpingPoints).then(async (mlResult) => {
+      // 1. Log audit entries
       for (const entry of mlResult.audit_entries || []) {
         await prisma.auditLog.create({ data: { scenario_id: scenarioId, event_type: entry.event_type, agent_name: entry.agent_name, reasoning_text: entry.reasoning_text } });
       }
-      broadcastToScenario(scenarioId, 'simulation.started', { scenario_id: scenarioId, zones_created: createdZones.length, sim_time: updated.sim_time });
+
+      // 2. Write proposed allocations into the database
+      const proposedAllocations = mlResult.proposed_allocations || [];
+      if (proposedAllocations.length > 0) {
+        const validAllocations = proposedAllocations
+          .filter((a) => a.zone_id && a.point_id && a.resource_id && a.quantity > 0)
+          .map((a) => ({
+            scenario_id: scenarioId,
+            zone_id: a.zone_id,
+            point_id: a.point_id,
+            resource_id: a.resource_id,
+            quantity: a.quantity,
+            target_lat: a.target_lat || 0,
+            target_lng: a.target_lng || 0,
+            status: 'proposed',
+          }));
+
+        if (validAllocations.length > 0) {
+          await prisma.allocation.createMany({ data: validAllocations });
+          console.log(`✅ [Sim] Created ${validAllocations.length} proposed allocations for scenario ${scenarioId}`);
+        }
+      }
+
+      // 3. Write zone_needs updates
+      const zoneNeedsUpdates = mlResult.zone_needs_updates || [];
+      for (const need of zoneNeedsUpdates) {
+        if (need.zone_id && need.resource_id) {
+          await prisma.zoneNeed.upsert({
+            where: { zone_id_resource_id: { zone_id: need.zone_id, resource_id: need.resource_id } },
+            update: { quantity_needed: need.quantity_needed, fulfillment_status: need.fulfillment_status || 'shortage' },
+            create: { zone_id: need.zone_id, resource_id: need.resource_id, quantity_needed: need.quantity_needed, quantity_fulfilled: 0, fulfillment_status: need.fulfillment_status || 'shortage' },
+          });
+        }
+      }
+
+      // 4. Update zone severity from ML predictions
+      for (const su of mlResult.severity_updates || []) {
+        if (su.zone_id) {
+          await prisma.zone.update({
+            where: { zone_id: su.zone_id },
+            data: { severity_score: su.severity_score, severity_level: su.severity_level, updated_at: new Date() },
+          }).catch(() => {}); // Ignore if zone not found
+        }
+      }
+
+      broadcastToScenario(scenarioId, 'simulation.started', { scenario_id: scenarioId, zones_created: createdZones.length, sim_time: updated.sim_time, allocations_proposed: proposedAllocations.length });
     }).catch((err) => console.error('❌ [Sim] Initial allocation failed:', err.message));
 
     res.json({ scenario_id: scenarioId, status: 'running', zones_created: createdZones.length, message: 'Simulation started.' });

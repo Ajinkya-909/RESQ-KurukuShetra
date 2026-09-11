@@ -6,5 +6,6 @@ joblib
 pytest
 fastapi
 uvicorn
+pydantic
 httpx
 ortools
