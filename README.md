@@ -160,29 +160,18 @@ git clone https://github.com/Ajinkya-909/RESQ-KurukuShetra.git
 cd RESQ-KurukuShetra
 ```
 
-### 2. Environment Configuration
-Create a `.env` file in the root directory:
-```env
-POSTGRES_USER=resq_admin
-POSTGRES_PASSWORD=resq_secret
-POSTGRES_DB=resq_disaster_db
-POSTGRES_PORT=5432
+### 2. Single-Command Launch (Zero-Config)
+All database schemas, initial seed data, ML dependencies, and inter-service environment variables are baked in:
 
-NODE_PORT=5000
-FASTAPI_PORT=8000
-FRONTEND_PORT=3000
-```
-
-### 3. Spin Up the Containers
 ```bash
-docker-compose up --build
+docker compose up --build -d
 ```
 
-### 4. Access the Services
-- **Command Dashboard (React)**: `http://localhost:3000`
-- **Orchestration API (Node.js)**: `http://localhost:5000`
-- **Agent Intelligence API (FastAPI Swagger)**: `http://localhost:8000/docs`
-- **PostgreSQL Database**: `localhost:5432`
+### 3. Access the Services
+- **Command Dashboard (React)**: [http://localhost:3000](http://localhost:3000)
+- **Node.js API Gateway**: [http://localhost:3001/api](http://localhost:3001/api) (Health: [http://localhost:3001/health](http://localhost:3001/health))
+- **FastAPI ML & YOLO Swagger Docs**: [http://localhost:8001/docs](http://localhost:8001/docs)
+- **PostgreSQL Database**: `localhost:5432` (`resq_db`)
 
 ---
 
