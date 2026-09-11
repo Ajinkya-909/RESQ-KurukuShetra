@@ -24,9 +24,10 @@ import {
 } from 'lucide-react';
 import { TacticalMapWrapper } from '../components/Map';
 import { NewSosModal } from '../components/Modals/NewSosModal';
-import { dashboardApi, allocationsApi, simulationApi, auditLogApi, scenariosApi } from '../api';
+import { ResponseCopilot } from '../components/ResponseCopilot/ResponseCopilot';
+import { dashboardApi, allocationsApi, simulationApi, auditLogApi, scenariosApi, copilotApi } from '../api';
 import { socketClient } from '../ws/socketClient';
-import { DashboardData, AuditLogItem, Zone, Report } from '../types';
+import { DashboardData, AuditLogItem, Zone, Report, CopilotState } from '../types';
 
 interface DashboardPageProps {
   scenarioId: string;
@@ -34,40 +35,38 @@ interface DashboardPageProps {
   onOpenSetup: () => void;
 }
 
-// Right Panel Component with Tabs for SOS Alerts & Pending Resource Approvals
+// Right Panel Component with Tabs for SOS Alerts, INSIGHTS & Pending Resource Approvals
 const RightCommandPanel: React.FC<{
   data: DashboardData | null;
   handleApprove: (id: number) => void;
   handleReject: (id: number) => void;
   setIsSosModalOpen: (open: boolean) => void;
-}> = ({ data, handleApprove, handleReject, setIsSosModalOpen }) => {
-  const [activeTab, setActiveTab] = useState<'sos' | 'approvals'>('approvals');
+  copilotState: CopilotState | null;
+  copilotLoading: boolean;
+  loadDashboard: (showLoading?: boolean) => Promise<void>;
+  setMapCenter: (center: { lat: number; lng: number }) => void;
+  setMapZoom: (zoom: number) => void;
+}> = ({
+  data,
+  handleApprove,
+  handleReject,
+  setIsSosModalOpen,
+  copilotState,
+  copilotLoading,
+  loadDashboard,
+  setMapCenter,
+  setMapZoom,
+}) => {
+  const [activeTab, setActiveTab] = useState<'sos' | 'insights' | 'approvals'>('sos');
 
   return (
     <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 shadow-md p-5 flex flex-col h-[560px] overflow-hidden">
       {/* Tab Switcher Header */}
       <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
-        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200/80">
-          <button
-            onClick={() => setActiveTab('approvals')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${
-              activeTab === 'approvals'
-                ? 'bg-white text-blue-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Shield className="w-3.5 h-3.5 text-blue-600" />
-            <span>Resource Approvals</span>
-            {data?.pending_approvals && data.pending_approvals.length > 0 && (
-              <span className="px-1.5 py-0.2 bg-amber-500 text-white rounded-full text-[10px]">
-                {data.pending_approvals.length}
-              </span>
-            )}
-          </button>
-
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200/80 overflow-x-auto">
           <button
             onClick={() => setActiveTab('sos')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'sos'
                 ? 'bg-white text-rose-700 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
@@ -81,18 +80,102 @@ const RightCommandPanel: React.FC<{
               </span>
             )}
           </button>
+
+          <button
+            onClick={() => setActiveTab('insights')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'insights'
+                ? 'bg-white text-indigo-700 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+            <span>INSIGHTS</span>
+            {copilotState?.incidents && copilotState.incidents.length > 0 && (
+              <span className="px-1.5 py-0.2 bg-indigo-600 text-white rounded-full text-[10px]">
+                {copilotState.incidents.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('approvals')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'approvals'
+                ? 'bg-white text-blue-700 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Shield className="w-3.5 h-3.5 text-blue-600" />
+            <span>Approvals</span>
+            {data?.pending_approvals && data.pending_approvals.length > 0 && (
+              <span className="px-1.5 py-0.2 bg-amber-500 text-white rounded-full text-[10px]">
+                {data.pending_approvals.length}
+              </span>
+            )}
+          </button>
         </div>
 
         <button
           onClick={() => setIsSosModalOpen(true)}
-          className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1"
+          className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1 shrink-0 ml-1"
         >
           <Plus className="w-3.5 h-3.5" />
-          <span>Report SOS</span>
+          <span className="hidden sm:inline">Report SOS</span>
         </button>
       </div>
 
-      {/* Tab 1: Pending Resource Approvals */}
+      {/* Tab 1: SOS Alerts Emergency Stream */}
+      {activeTab === 'sos' && (
+        <div className="flex-1 overflow-y-auto pt-4 space-y-3 pr-1">
+          {(!data?.active_reports || data.active_reports.length === 0) ? (
+            <div className="p-12 text-center bg-slate-50 rounded-3xl border border-slate-200 text-xs text-slate-500 font-medium space-y-2 my-auto">
+              <Radio className="w-10 h-10 text-slate-400 mx-auto" />
+              <p>No active citizen SOS emergency reports filed in this corridor.</p>
+            </div>
+          ) : (
+            data.active_reports.map((rep) => (
+              <div key={rep.report_id} className="p-4 rounded-2xl bg-rose-50/40 border border-rose-100 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-extrabold text-rose-700 uppercase">
+                    SOS #{rep.report_id} {rep.zone_name ? `• ${rep.zone_name}` : ''}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {new Date(rep.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <p className="text-xs font-bold text-slate-800 italic">"{rep.raw_text}"</p>
+                <div className="flex items-center gap-3 text-[11px]">
+                  <span className="px-2.5 py-0.5 rounded-md bg-rose-100 text-rose-800 font-black">
+                    Severity Signal: {((rep.severity_signal || 0.5) * 10).toFixed(1)} / 10
+                  </span>
+                  <span className="text-slate-500 font-medium capitalize">
+                    Status: {rep.verification_status || 'verified'}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Tab 2: RESQ AI Response Copilot Insights */}
+      {activeTab === 'insights' && (
+        <div className="flex-1 overflow-y-auto pt-3 space-y-3 pr-1">
+          <ResponseCopilot
+            copilotState={copilotState}
+            loading={copilotLoading}
+            onRefresh={() => loadDashboard(false)}
+            onViewOnMap={(lat, lng) => {
+              setMapCenter({ lat, lng });
+              setMapZoom(14);
+            }}
+            data={data}
+          />
+        </div>
+      )}
+
+      {/* Tab 3: Pending Resource Approvals */}
       {activeTab === 'approvals' && (
         <div className="flex-1 overflow-y-auto pt-4 space-y-3 pr-1">
           {(!data?.pending_approvals || data.pending_approvals.length === 0) ? (
@@ -158,40 +241,6 @@ const RightCommandPanel: React.FC<{
           )}
         </div>
       )}
-
-      {/* Tab 2: SOS Alerts Emergency Stream */}
-      {activeTab === 'sos' && (
-        <div className="flex-1 overflow-y-auto pt-4 space-y-3 pr-1">
-          {(!data?.active_reports || data.active_reports.length === 0) ? (
-            <div className="p-12 text-center bg-slate-50 rounded-3xl border border-slate-200 text-xs text-slate-500 font-medium space-y-2 my-auto">
-              <Radio className="w-10 h-10 text-slate-400 mx-auto" />
-              <p>No active citizen SOS emergency reports filed in this corridor.</p>
-            </div>
-          ) : (
-            data.active_reports.map((rep) => (
-              <div key={rep.report_id} className="p-4 rounded-2xl bg-rose-50/40 border border-rose-100 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-extrabold text-rose-700 uppercase">
-                    SOS #{rep.report_id} {rep.zone_name ? `• ${rep.zone_name}` : ''}
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    {new Date(rep.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-                <p className="text-xs font-bold text-slate-800 italic">"{rep.raw_text}"</p>
-                <div className="flex items-center gap-3 text-[11px]">
-                  <span className="px-2.5 py-0.5 rounded-md bg-rose-100 text-rose-800 font-black">
-                    Severity Signal: {((rep.severity_signal || 0.5) * 10).toFixed(1)} / 10
-                  </span>
-                  <span className="text-slate-500 font-medium capitalize">
-                    Status: {rep.verification_status || 'verified'}
-                  </span>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
     </div>
   );
 };
@@ -202,6 +251,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   onOpenSetup,
 }) => {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [copilotState, setCopilotState] = useState<CopilotState | null>(null);
+  const [copilotLoading, setCopilotLoading] = useState(false);
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | undefined>(undefined);
+  const [mapZoom, setMapZoom] = useState<number | undefined>(undefined);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [ticking, setTicking] = useState(false);
@@ -212,12 +265,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
   const [isValidId, setIsValidId] = useState<boolean | null>(null);
 
-  // 1. Fetch Dashboard & Audit Log Payload with ID Validation
+  // 1. Fetch Dashboard, Copilot & Audit Log Payload with ID Validation
   const loadDashboard = useCallback(async (showLoading = false) => {
     try {
       if (showLoading) setLoading(true);
-      const [dashResult, logsResult] = await Promise.all([
+      setCopilotLoading(true);
+
+      const [dashResult, copilotResult, logsResult] = await Promise.all([
         dashboardApi.getDashboard(scenarioId).catch(() => null),
+        copilotApi.getCopilotState(scenarioId).catch(() => null),
         auditLogApi.list(scenarioId, { limit: 25 }).catch(() => null),
       ]);
 
@@ -233,6 +289,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           setIsValidId(false);
         }
       }
+
+      if (copilotResult) {
+        setCopilotState(copilotResult);
+      }
+
       if (logsResult && logsResult.logs) {
         setAuditLogs(logsResult.logs);
       }
@@ -240,6 +301,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       console.warn('Dashboard fetch notice:', err.message);
       setIsValidId(false);
     } finally {
+      setCopilotLoading(false);
       if (showLoading) setLoading(false);
     }
   }, [scenarioId]);
@@ -723,6 +785,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             {/* Map Canvas */}
             <div className="flex-1 relative mt-3 rounded-2xl overflow-hidden border border-slate-200">
               <TacticalMapWrapper
+                center={mapCenter}
+                zoom={mapZoom}
                 zones={data?.zones || []}
                 helpingPoints={data?.helping_points || []}
                 reports={data?.active_reports || []}
@@ -781,6 +845,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             handleApprove={handleApprove}
             handleReject={handleReject}
             setIsSosModalOpen={setIsSosModalOpen}
+            copilotState={copilotState}
+            copilotLoading={copilotLoading}
+            loadDashboard={loadDashboard}
+            setMapCenter={setMapCenter}
+            setMapZoom={setMapZoom}
           />
         </section>
 

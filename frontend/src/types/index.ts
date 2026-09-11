@@ -252,3 +252,76 @@ export interface ApiError {
     details?: any;
   };
 }
+
+// ── Response Copilot & Mission Contracts ────────────────────
+export interface CopilotResourceRequirement {
+  resource_name: string;
+  quantity: number;
+}
+
+export interface GeminiAiBrief {
+  ai_available: boolean;
+  fallback_reason?: string;
+  incident_summary: string;
+  incident_type: string;
+  urgency_explanation: string;
+  response_explanation: string;
+  key_factors: string[];
+  model_used?: string;
+}
+
+export interface CopilotIncident {
+  incident_id: string;
+  scenario_id: string;
+  name: string;
+  sector_name: string;
+  report_ids: number[];
+  center_lat: number;
+  center_lng: number;
+  report_count: number;
+  affected_people: number;
+  medical_cases: number;
+  severity_score: number;
+  severity_level: 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW' | string;
+  priority_score: number;
+  status: 'ACTION_REQUIRED' | 'DETECTED' | 'APPROVED' | 'DISPATCHED' | 'IN_PROGRESS' | 'RESOLVED' | string;
+  allocation_ids: number[];
+  recommended_depot: string;
+  recommended_resources: CopilotResourceRequirement[];
+  ground_truth_reasons: string[];
+  ai_brief?: GeminiAiBrief;
+  created_at: string;
+}
+
+export interface CopilotMission {
+  mission_id: string;
+  allocation_id: number;
+  scenario_id: string;
+  title: string;
+  resource_name: string;
+  quantity: number;
+  unit: string;
+  source_depot: string;
+  destination_zone: string;
+  target_lat: number;
+  target_lng: number;
+  status: 'APPROVED' | 'DISPATCHED' | 'EN_ROUTE' | 'DELIVERED' | string;
+  raw_allocation_status: string;
+  updated_at: string;
+}
+
+export interface CopilotState {
+  scenario_id: string;
+  all_clear: boolean;
+  summary: {
+    total_incidents: number;
+    action_required: number;
+    critical_incidents: number;
+    total_affected_citizens: number;
+    active_missions: number;
+    monitoring_zones: number;
+  };
+  incidents: CopilotIncident[];
+  missions: CopilotMission[];
+}
+

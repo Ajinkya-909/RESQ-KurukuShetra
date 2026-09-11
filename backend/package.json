@@ -11,6 +11,7 @@
     "db:check": "node src/scripts/dbCheck.js"
   },
   "dependencies": {
+    "@google/genai": "^2.22.0",
     "@prisma/client": "^5.22.0",
     "axios": "^1.7.7",
     "cors": "^2.8.5",

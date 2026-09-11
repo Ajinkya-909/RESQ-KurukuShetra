@@ -7,3 +7,5 @@ export * from './allocationsApi';
 export * from './simulationApi';
 export * from './helpingPointsApi';
 export * from './auditLogApi';
+export * from './copilotApi';
+

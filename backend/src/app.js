@@ -19,6 +19,8 @@ import dashboardRouter from './routes/dashboard.js';
 import auditLogRouter from './routes/auditLog.js';
 import simulationRouter from './routes/simulation.js';
 
+import copilotRouter from './routes/copilot.js';
+
 // Middleware
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -59,6 +61,7 @@ app.use('/api/scenarios/:scenarioId/allocations',  allocationsRouter);
 app.use('/api/scenarios/:scenarioId/dashboard',    dashboardRouter);
 app.use('/api/scenarios/:scenarioId/audit-log',    auditLogRouter);
 app.use('/api/scenarios/:scenarioId/simulation',   simulationRouter);
+app.use('/api/scenarios/:scenarioId/copilot',      copilotRouter);
 
 // ── 404 Handler ──────────────────────────────────────────────
 app.use((_req, res) => {
