@@ -24,7 +24,7 @@ const haversineDistance = (lat1, lng1, lat2, lng2) => {
 router.post('/', async (req, res, next) => {
   try {
     const { scenarioId } = req.params;
-    const { lat, lng, raw_text, source = 'field_report' } = req.body;
+    const { lat, lng, raw_text, source = 'field_report', needed_resources = [] } = req.body;
 
     if (lat == null || lng == null || !raw_text) {
       throw createError(400, 'VALIDATION_ERROR', 'lat, lng, and raw_text are required');
@@ -61,15 +61,18 @@ router.post('/', async (req, res, next) => {
         agent_name: 'system',
         zone_id,
         report_id: report.report_id,
-        reasoning_text: `SOS received at (${lat}, ${lng}) — ${zone_id ? `assigned to zone ${zone_id}` : 'no enclosing zone'}`,
+        reasoning_text: `SOS received at (${lat}, ${lng}) — ${zone_id ? `assigned to zone ${zone_id}` : 'no enclosing zone'}${needed_resources.length ? `. Requested: ${needed_resources.join(', ')}` : ''}`,
       },
     });
 
     broadcastToScenario(scenarioId, 'report.received', report);
     res.status(202).json({ ...report, processing_status: 'queued' });
 
+    // Attach needed_resources for ML processing
+    const reportWithNeeds = { ...report, needed_resources };
+
     // Async ML pipeline
-    processReportAsync(report, scenarioId).catch((err) =>
+    processReportAsync(reportWithNeeds, scenarioId).catch((err) =>
       console.error(`❌ [Report] Async pipeline failed for ${report.report_id}:`, err.message)
     );
   } catch (err) {

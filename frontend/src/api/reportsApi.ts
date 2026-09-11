@@ -13,6 +13,7 @@ export const reportsApi = {
       lng: number;
       raw_text: string;
       source?: string;
+      needed_resources?: string[];
     }
   ) => api.post<Report & { processing_status: string }>(`/scenarios/${scenarioId}/reports`, data),
 };

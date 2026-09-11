@@ -1,12 +1,20 @@
-"""
-Google OR-Tools Constrained Resource Allocation Optimizer.
-Formulates linear integer programming model to maximize priority-weighted fulfilled demand across zones
-under helping point inventory capacity constraints.
-"""
-
+import math
 from typing import Dict, Any, List
 from ortools.linear_solver import pywraplp
 from ml.src.allocation.schemas import validate_allocation_inputs
+
+
+def haversine_distance_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Calculates Haversine distance in kilometers between two GPS coordinates."""
+    if lat1 == 0.0 or lng1 == 0.0 or lat2 == 0.0 or lng2 == 0.0:
+        return 0.0
+    R = 6371.0  # Radius of Earth in km
+    dlat = math.radians(lat2 - lat1)
+    dlng = math.radians(lng2 - lng1)
+    a = (math.sin(dlat / 2) ** 2 +
+         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
 
 
 def optimize_allocations(
@@ -23,30 +31,10 @@ def optimize_allocations(
     Constraints:
       1. Inventory Limit: Sum_z x[z, h, r] <= inventory[h, r] (for each helping point h and resource r)
       2. Demand Limit:    Sum_h x[z, h, r] <= need[z, r]      (for each zone z and resource r)
+      3. Anti-Hoarding:   x[z, h, r] <= 0.75 * inventory[h, r] (when multiple zones request resource r)
 
     Objective Function:
-      Maximize Sum_{z, h, r} ( severity_score[z] * x[z, h, r] )
-
-    Returns:
-    {
-        "status": "OPTIMAL",
-        "allocations": [
-            {
-                "zone_id": str,
-                "helping_point_id": str,
-                "resource": str,
-                "quantity": float/int
-            }, ...
-        ],
-        "unmet_demand": {
-            "ZONE-A": {"food": 100.0}, ...
-        },
-        "summary": {
-            "total_requested": float,
-            "total_allocated": float,
-            "total_unmet": float
-        }
-    }
+      Maximize Sum_{z, h, r} ( (severity_score[z] * sos_boost * distance_decay) * x[z, h, r] )
     """
     clean_zones, clean_points = validate_allocation_inputs(zones, helping_points)
 
@@ -96,14 +84,44 @@ def optimize_allocations(
                 solver.Sum([x[(z_id, hp["helping_point_id"], r)] for hp in clean_points]) <= needed_qty
             )
 
-    # Objective: Maximize severity-weighted allocation quantity
+    # Constraint 3: Multi-Region Anti-Hoarding Constraint
+    num_zones = len(clean_zones)
+    if num_zones > 1:
+        for hp in clean_points:
+            hp_id = hp["helping_point_id"]
+            inv = hp["inventory"]
+            for r in resources:
+                available_stock = float(inv.get(r, 0.0))
+                requesting_zones = [z for z in clean_zones if float(z.get("needs", {}).get(r, 0.0)) > 0]
+                if len(requesting_zones) > 1 and available_stock > 0:
+                    for z in requesting_zones:
+                        z_id = z["zone_id"]
+                        # Target SOS zone gets higher cap allowance (90%), normal zones capped at 75%
+                        cap_ratio = 0.90 if z.get("is_sos_target") else 0.75
+                        cap = max(1.0, available_stock * cap_ratio)
+                        solver.Add(x[(z_id, hp_id, r)] <= cap)
+
+    # Objective: Maximize severity, SOS priority, and distance-weighted allocation quantity
     objective = solver.Objective()
     for z in clean_zones:
         z_id = z["zone_id"]
-        # Scale severity weight to prioritize critical zones (min weight 0.01 to ensure non-zero priority)
-        weight = max(0.01, float(z["severity_score"]))
+        sev_score = max(0.01, float(z.get("severity_score", 0.1)))
+        is_sos_target = bool(z.get("is_sos_target", False))
+        sos_multiplier = 2.5 if is_sos_target else 1.0
+
+        z_lat = float(z.get("_center_lat", 0.0) or 0.0)
+        z_lng = float(z.get("_center_lng", 0.0) or 0.0)
+
         for hp in clean_points:
             hp_id = hp["helping_point_id"]
+            hp_lat = float(hp.get("_lat", 0.0) or 0.0)
+            hp_lng = float(hp.get("_lng", 0.0) or 0.0)
+
+            # Distance decay: preference given to closer depots
+            dist_km = haversine_distance_km(z_lat, z_lng, hp_lat, hp_lng) if (z_lat and hp_lat) else 0.0
+            distance_decay = 1.0 / (1.0 + 0.02 * dist_km)  # ~2% decay per km distance
+
+            weight = sev_score * sos_multiplier * distance_decay
             for r in resources:
                 objective.SetCoefficient(x[(z_id, hp_id, r)], weight)
 

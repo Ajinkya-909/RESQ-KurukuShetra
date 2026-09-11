@@ -178,9 +178,14 @@ def process_report(body: Dict[str, Any]) -> Dict[str, Any]:
         severity_score = severity_result["severity_score"]
         severity_level = severity_result["severity_level"]
 
-        # 3. Extract structured info from raw_text (keyword-based NLP extraction)
+        # 3. Extract structured info from raw_text and explicit needed_resources
         raw_text = (report.get("raw_text") or "").lower()
         extracted = extract_report_entities(raw_text)
+        
+        # Merge explicitly selected resources from report payload if present
+        explicit_resources = report.get("needed_resources", []) or report.get("requested_resources", [])
+        if isinstance(explicit_resources, list):
+            extracted["required_resources"] = list(set(extracted.get("required_resources", []) + explicit_resources))
 
         # Build emergency extra needs from the SOS report
         sos_extra_needs: Dict[str, float] = {}
@@ -195,6 +200,24 @@ def process_report(body: Dict[str, Any]) -> Dict[str, Any]:
         if medical_need in ["high", "moderate"]:
             sos_extra_needs["medical"] = 20.0 if medical_need == "high" else 10.0
             sos_extra_needs["ambulance"] = 2.0 if medical_need == "high" else 1.0
+
+        # Inject requirements from explicitly requested resources
+        for req_res in extracted["required_resources"]:
+            req_clean = req_res.lower()
+            if "water" in req_clean:
+                sos_extra_needs["water"] = max(sos_extra_needs.get("water", 0), 50.0)
+            elif "food" in req_clean:
+                sos_extra_needs["food"] = max(sos_extra_needs.get("food", 0), 30.0)
+            elif "medical" in req_clean:
+                sos_extra_needs["medical"] = max(sos_extra_needs.get("medical", 0), 15.0)
+            elif "boat" in req_clean:
+                sos_extra_needs["rescue_boat"] = max(sos_extra_needs.get("rescue_boat", 0), 2.0)
+            elif "ambulance" in req_clean:
+                sos_extra_needs["ambulance"] = max(sos_extra_needs.get("ambulance", 0), 1.0)
+            elif "team" in req_clean or "rescue" in req_clean:
+                sos_extra_needs["rescue_team"] = max(sos_extra_needs.get("rescue_team", 0), 2.0)
+            elif "shelter" in req_clean or "tent" in req_clean:
+                sos_extra_needs["shelter"] = max(sos_extra_needs.get("shelter", 0), 5.0)
 
         print(f"   ML Severity Score: {severity_score:.2f} ({severity_level}) | SOS Extra Needs: {sos_extra_needs}")
 
@@ -216,10 +239,11 @@ def process_report(body: Dict[str, Any]) -> Dict[str, Any]:
             disaster_type=disaster_type,
         )
 
-        # Inject SOS report emergency needs into target zone in adapted_zones
+        # Inject SOS report emergency needs & high priority flag into target zone in adapted_zones
         if report_zone_id is not None and adapted_zones:
             target_z = next((az for az in adapted_zones if str(az["zone_id"]) == str(report_zone_id)), None)
             if target_z:
+                target_z["is_sos_target"] = True
                 target_z["severity_score"] = max(float(target_z.get("severity_score", 0.0)), 0.85)
                 for res_n, extra_q in sos_extra_needs.items():
                     target_z["needs"][res_n] = round(target_z["needs"].get(res_n, 0.0) + extra_q, 2)
@@ -238,7 +262,8 @@ def process_report(body: Dict[str, Any]) -> Dict[str, Any]:
             except Exception as opt_err:
                 print(f"❌ [ML Service] Reallocation Optimizer failed: {opt_err}")
 
-        # 5. Build audit trail
+        # 5. Build audit trail including preemption notices
+        total_proposed_qty = sum(a.get("quantity", 0) for a in proposed_allocations)
         audit_entries = [
             {
                 "event_type": "report_verified",
@@ -249,18 +274,18 @@ def process_report(body: Dict[str, Any]) -> Dict[str, Any]:
             {
                 "event_type": "reallocation_proposed",
                 "agent_name": "CoordinatorAgent",
-                "reasoning_text": f"SOS Report #{report.get('report_id')} triggered global resource reallocation. "
-                    + f"Cleared stale proposals and computed {len(proposed_allocations)} new allocation proposals using OR-Tools.",
+                "reasoning_text": f"SOS Report #{report.get('report_id')} triggered preemptive resource reallocation. "
+                    + f"Evaluated unallocated depot stock and proposed {len(proposed_allocations)} allocations ({total_proposed_qty:.0f} units) with priority boost to target location.",
             },
         ]
 
-        if extracted.get("stranded_count", 0) > 0 or extracted.get("medical_need"):
+        if extracted.get("stranded_count", 0) > 0 or extracted.get("medical_need") or extracted.get("required_resources"):
             audit_entries.append({
                 "event_type": "needs_assessed",
                 "agent_name": "NeedsAgent",
-                "reasoning_text": f"Extracted: {extracted.get('stranded_count', 0)} stranded, "
+                "reasoning_text": f"Extracted requirements: {extracted.get('stranded_count', 0)} stranded, "
                     + f"medical need: {extracted.get('medical_need', 'unknown')}, "
-                    + f"incident: {extracted.get('incident_type', 'unclassified')}.",
+                    + f"requested: {', '.join(extracted.get('required_resources', [])) or 'general relief'}.",
             })
 
         return {

@@ -115,10 +115,17 @@ export const NewSosModal: React.FC<NewSosModalProps> = ({
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [channelId, setChannelId] = useState<'citizen' | 'first_responder' | 'social_radio'>('citizen');
+  const [neededResources, setNeededResources] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const toggleResource = (resId: string) => {
+    setNeededResources((prev) =>
+      prev.includes(resId) ? prev.filter((r) => r !== resId) : [...prev, resId]
+    );
+  };
 
   const handleClearPin = () => {
     setLat(null);
@@ -137,10 +144,6 @@ export const NewSosModal: React.FC<NewSosModalProps> = ({
       return;
     }
 
-    // Preserve backend source mapping:
-    // Citizen Phone -> field_report
-    // First Responder -> agency_update
-    // Social / Radio -> agency_update
     const source = channelId === 'citizen' ? 'field_report' : 'agency_update';
 
     try {
@@ -151,18 +154,30 @@ export const NewSosModal: React.FC<NewSosModalProps> = ({
         lng: Number(lng),
         raw_text: rawText.trim(),
         source,
+        needed_resources: neededResources,
       });
       onReportSubmitted(res);
       onClose();
       setRawText('');
       setLat(null);
       setLng(null);
+      setNeededResources([]);
     } catch (err: any) {
       setError(err.message || 'Failed to dispatch SOS field alert');
     } finally {
       setSubmitting(false);
     }
   };
+
+  const resourceOptions = [
+    { id: 'water', label: '💧 Drinking Water' },
+    { id: 'food', label: '📦 Food Packets' },
+    { id: 'medical', label: '🩹 Medical Kits' },
+    { id: 'rescue_boat', label: '🚤 Rescue Boat' },
+    { id: 'rescue_team', label: '🦺 Rescue Team' },
+    { id: 'ambulance', label: '🚑 Ambulance' },
+    { id: 'shelter', label: '⛺ Tents / Shelter' },
+  ];
 
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
@@ -210,6 +225,33 @@ export const NewSosModal: React.FC<NewSosModalProps> = ({
               placeholder="e.g. 5 families trapped in 2nd floor near Sangamwadi river edge. Need drinking water and life jackets immediately..."
               className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400"
             />
+          </div>
+
+          {/* Target Required Resources Selector */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+              <span>Explicitly Required Resources</span>
+              <span className="text-[10px] text-slate-400 font-medium lowercase">(optional micro-target)</span>
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {resourceOptions.map((res) => {
+                const selected = neededResources.includes(res.id);
+                return (
+                  <button
+                    key={res.id}
+                    type="button"
+                    onClick={() => toggleResource(res.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                      selected
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {res.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* SOS Location Section with Interactive Map */}
