@@ -238,7 +238,7 @@ def build_resource_name_map(
 ) -> Dict[str, int]:
     """
     Build a robust resource_name → resource_id lookup from helping point inventory data.
-    Includes case-insensitive and standard synonym mapping.
+    Includes case-insensitive, punctuation-stripped, and standard synonym mapping.
     """
     name_to_id: Dict[str, int] = {}
     for pt in helping_points:
@@ -252,22 +252,39 @@ def build_resource_name_map(
                 res_id_int = int(res_id)
                 name_to_id[res_name] = res_id_int
                 name_to_id[res_name.lower()] = res_id_int
+                name_to_id[res_name.lower().replace(" ", "_")] = res_id_int
+                name_to_id[res_name.lower().replace("_", " ")] = res_id_int
                 
                 lower_name = res_name.lower()
                 if "water" in lower_name:
                     name_to_id["water"] = res_id_int
+                    name_to_id["drinking_water"] = res_id_int
+                    name_to_id["drinking water"] = res_id_int
                 if "food" in lower_name:
                     name_to_id["food"] = res_id_int
-                if "medical" in lower_name:
+                    name_to_id["food_packets"] = res_id_int
+                    name_to_id["food packets"] = res_id_int
+                    name_to_id["ration"] = res_id_int
+                if "medical" in lower_name or "kit" in lower_name:
                     name_to_id["medical"] = res_id_int
+                    name_to_id["medical_kits"] = res_id_int
+                    name_to_id["medical kits"] = res_id_int
+                    name_to_id["first_aid"] = res_id_int
                 if "rescue" in lower_name and "boat" not in lower_name:
                     name_to_id["rescue_team"] = res_id_int
+                    name_to_id["rescue team"] = res_id_int
+                    name_to_id["rescue_teams"] = res_id_int
                 if "boat" in lower_name:
                     name_to_id["rescue_boat"] = res_id_int
+                    name_to_id["rescue boat"] = res_id_int
+                    name_to_id["boat"] = res_id_int
                 if "ambulance" in lower_name:
                     name_to_id["ambulance"] = res_id_int
+                    name_to_id["ambulances"] = res_id_int
                 if "shelter" in lower_name or "tent" in lower_name:
                     name_to_id["shelter"] = res_id_int
+                    name_to_id["tents"] = res_id_int
+                    name_to_id["tent"] = res_id_int
     return name_to_id
 
 
@@ -297,10 +314,10 @@ def map_allocations_to_db_format(
     for alloc in optimizer_result.get("allocations", []):
         z_id = str(alloc["zone_id"])
         hp_id = str(alloc["helping_point_id"])
-        res_name = alloc["resource"]
-        qty = alloc["quantity"]
+        res_name = str(alloc["resource"])
+        raw_qty = float(alloc["quantity"])
 
-        if qty <= 0:
+        if raw_qty <= 0:
             continue
 
         z_meta = zone_meta.get(z_id, {})
@@ -309,22 +326,26 @@ def map_allocations_to_db_format(
         res_id = (
             resource_name_to_id.get(res_name)
             or resource_name_to_id.get(res_name.lower())
+            or resource_name_to_id.get(res_name.lower().replace(" ", "_"))
             or fallback_res_id
         )
 
+        # Discretize quantity for integer items, min 1
+        clean_qty = float(max(1, int(round(raw_qty))))
+
         # Micro-SOS allocation targets report coordinates if matching zone, else zone center
         if report_lat is not None and report_lng is not None and report_zone_id is not None and z_id == report_zone_id:
-            target_lat = report_lat
-            target_lng = report_lng
+            target_lat = float(report_lat)
+            target_lng = float(report_lng)
         else:
-            target_lat = z_meta.get("_center_lat", 0.0)
-            target_lng = z_meta.get("_center_lng", 0.0)
+            target_lat = float(z_meta.get("_center_lat", 0.0) or 0.0)
+            target_lng = float(z_meta.get("_center_lng", 0.0) or 0.0)
 
         db_allocations.append({
             "zone_id": int(z_id) if z_id.isdigit() else 0,
             "point_id": int(hp_id) if hp_id.isdigit() else 0,
             "resource_id": int(res_id),
-            "quantity": round(qty, 2),
+            "quantity": clean_qty,
             "target_lat": target_lat,
             "target_lng": target_lng,
         })

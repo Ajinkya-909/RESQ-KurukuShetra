@@ -141,7 +141,21 @@ export const LeafletMapEngine: React.FC<TacticalMapProps> = ({
 
     mapRef.current = map;
 
+    // Invalidate size on initial mount and container resize
+    const timer1 = setTimeout(() => map.invalidateSize(), 150);
+    const timer2 = setTimeout(() => map.invalidateSize(), 500);
+
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
     return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
     };

@@ -159,13 +159,13 @@ const processReportAsync = async (report, scenarioId) => {
     .filter((a) => a.zone_id && a.point_id && a.resource_id > 0 && a.quantity > 0)
     .map((a) => ({
       scenario_id: scenarioId,
-      zone_id:     a.zone_id,
+      zone_id:     parseInt(a.zone_id),
       report_id:   report.report_id,
-      point_id:    a.point_id,
-      resource_id: a.resource_id,
-      quantity:    a.quantity,
-      target_lat:  a.target_lat || report.lat,
-      target_lng:  a.target_lng || report.lng,
+      point_id:    parseInt(a.point_id),
+      resource_id: parseInt(a.resource_id),
+      quantity:    Math.max(1, Math.round(a.quantity)),
+      target_lat:  parseFloat(a.target_lat || report.lat),
+      target_lng:  parseFloat(a.target_lng || report.lng),
       status:      'proposed',
     }));
 

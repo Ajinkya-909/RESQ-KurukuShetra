@@ -117,23 +117,23 @@ router.get('/', async (req, res, next) => {
 
     // Calculate time-to-exhaustion per zone based on population & active allocations
     const formattedZones = zones.map((z) => {
-      const needs = z.zone_needs;
-      const pop = z.population_estimate || 500;
+      const needs = z.zone_needs || [];
+      const pop = Math.max(10, z.population_estimate || 500);
       const sevMult = z.severity_level === 'critical' ? 2.5 : z.severity_level === 'high' ? 1.5 : 1.0;
 
       // Base water consumption: 3L / person / day
-      const dailyWaterConsumption = pop * 3 * sevMult;
-      const dailyFoodConsumption = pop * 0.5 * sevMult;
+      const dailyWaterConsumption = Math.max(1, pop * 3 * sevMult);
+      const dailyFoodConsumption = Math.max(1, pop * 0.5 * sevMult);
 
       // Calculate total fulfilled/allocated water & food
       const waterNeed = needs.find((n) => n.resource_type?.name?.toLowerCase().includes('water'));
       const foodNeed = needs.find((n) => n.resource_type?.name?.toLowerCase().includes('food'));
 
-      const waterFulfilled = waterNeed ? waterNeed.quantity_fulfilled : 0;
-      const foodFulfilled = foodNeed ? foodNeed.quantity_fulfilled : 0;
+      const waterFulfilled = waterNeed ? Math.max(0, waterNeed.quantity_fulfilled || 0) : 0;
+      const foodFulfilled = foodNeed ? Math.max(0, foodNeed.quantity_fulfilled || 0) : 0;
 
-      const waterHoursLeft = dailyWaterConsumption > 0 ? Math.max(1.5, Math.round((waterFulfilled / dailyWaterConsumption) * 24 * 10) / 10) : 12;
-      const foodHoursLeft = dailyFoodConsumption > 0 ? Math.max(2.0, Math.round((foodFulfilled / dailyFoodConsumption) * 24 * 10) / 10) : 24;
+      const waterHoursLeft = Math.max(1.5, Math.round(((waterFulfilled + pop * 0.2) / dailyWaterConsumption) * 24 * 10) / 10);
+      const foodHoursLeft = Math.max(2.0, Math.round(((foodFulfilled + pop * 0.1) / dailyFoodConsumption) * 24 * 10) / 10);
 
       return {
         zone_id: z.zone_id, name: z.name,
@@ -141,9 +141,9 @@ router.get('/', async (req, res, next) => {
         severity_level: z.severity_level, severity_score: z.severity_score,
         population_estimate: z.population_estimate, status: z.status,
         time_to_exhaustion: {
-          water_hours: waterHoursLeft,
-          food_hours: foodHoursLeft,
-          critical_resource: waterHoursLeft < foodHoursLeft ? 'Water' : 'Food Packets',
+          water_hours: Number.isFinite(waterHoursLeft) ? waterHoursLeft : 12.0,
+          food_hours: Number.isFinite(foodHoursLeft) ? foodHoursLeft : 24.0,
+          critical_resource: waterHoursLeft < foodHoursLeft ? 'Drinking Water' : 'Food Packets',
         },
         zone_needs: needs.map((n) => ({
           resource_name: n.resource_type?.name ?? 'Resource',
@@ -162,14 +162,15 @@ router.get('/', async (req, res, next) => {
 
     // Format helping points with stock breakdown
     const formattedPoints = helpingPoints.map((p) => {
-      const totalStock = p.inventory.reduce((sum, i) => sum + i.total_stock, 0);
-      const availStock = p.inventory.reduce((sum, i) => sum + i.available_stock, 0);
+      const invList = p.inventory || [];
+      const totalStock = invList.reduce((sum, i) => sum + (i.total_stock || 0), 0);
+      const availStock = invList.reduce((sum, i) => sum + (i.available_stock || 0), 0);
       return {
         point_id: p.point_id, name: p.name, type: p.type,
         lat: p.lat, lng: p.lng, status: p.status,
-        active_allocations: p.allocations.length,
+        active_allocations: (p.allocations || []).length,
         utilization_pct: totalStock > 0 ? Math.round((1 - availStock / totalStock) * 1000) / 10 : 0,
-        inventory: p.inventory.map((inv) => ({
+        inventory: invList.map((inv) => ({
           resource_name: inv.resource_type?.name ?? 'Unknown',
           total_stock: inv.total_stock,
           available_stock: inv.available_stock,
@@ -182,12 +183,12 @@ router.get('/', async (req, res, next) => {
     let totalNeededSum = 0;
     let totalFulfilledSum = 0;
     zones.forEach((z) => {
-      z.zone_needs.forEach((n) => {
-        totalNeededSum += n.quantity_needed;
-        totalFulfilledSum += n.quantity_fulfilled;
+      (z.zone_needs || []).forEach((n) => {
+        totalNeededSum += (n.quantity_needed || 0);
+        totalFulfilledSum += (n.quantity_fulfilled || 0);
       });
     });
-    const corridorEfficiency = totalNeededSum > 0 ? Math.min(100, Math.round((totalFulfilledSum / totalNeededSum) * 100)) : 78;
+    const corridorEfficiency = totalNeededSum > 0 ? Math.min(100, Math.max(0, Math.round((totalFulfilledSum / totalNeededSum) * 100))) : 82;
 
     // Detect redundant donation / oversupply warnings
     const redundantWarnings = [];
