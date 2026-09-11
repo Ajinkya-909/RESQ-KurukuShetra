@@ -1,17 +1,16 @@
 import React from 'react';
-import { AlertTriangle, MapPin, Users, HeartPulse, ShieldAlert, Brain } from 'lucide-react';
+import { AlertTriangle, MapPin, Users, HeartPulse, Brain } from 'lucide-react';
 import { CopilotIncident } from '../../types';
 
 interface IncidentCardProps {
   incident: CopilotIncident;
   onViewOnMap: (lat: number, lng: number) => void;
-  onReviewResponse: (incident: CopilotIncident) => void;
+  onReviewResponse?: (incident: CopilotIncident) => void;
 }
 
 export const IncidentCard: React.FC<IncidentCardProps> = ({
   incident,
   onViewOnMap,
-  onReviewResponse,
 }) => {
   const getBadgeStyle = (level: string) => {
     switch (level.toUpperCase()) {
@@ -29,7 +28,7 @@ export const IncidentCard: React.FC<IncidentCardProps> = ({
   const aiBrief = incident.ai_brief;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition-all space-y-3">
+    <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition-all space-y-3 font-sans">
       {/* Header Badge & Title */}
       <div className="flex items-start justify-between gap-2">
         <div className="space-y-1">
@@ -105,22 +104,14 @@ export const IncidentCard: React.FC<IncidentCardProps> = ({
         </span>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex items-center gap-2 pt-2">
+      {/* Single View on Map Button (Approvals take place in Approvals tab) */}
+      <div className="pt-2">
         <button
           onClick={() => onViewOnMap(incident.center_lat, incident.center_lng)}
-          className="flex-1 py-2 px-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+          className="w-full py-2 px-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
         >
           <MapPin className="w-3.5 h-3.5 text-blue-600" />
           <span>VIEW ON MAP</span>
-        </button>
-
-        <button
-          onClick={() => onReviewResponse(incident)}
-          className="flex-1 py-2 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs flex items-center justify-center gap-1.5 shadow-sm shadow-rose-500/20 transition-all cursor-pointer"
-        >
-          <ShieldAlert className="w-3.5 h-3.5" />
-          <span>REVIEW RESPONSE</span>
         </button>
       </div>
     </div>

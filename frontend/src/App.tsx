@@ -166,6 +166,7 @@ export function App() {
         {/* Page 5: Agency Dispatch View */}
         {route.name === 'agency' && (
           <AgencyPage
+            scenarioId={activeScenarioId}
             onNavigateHome={() => navigate('/')}
             onNavigateToDashboard={() => navigate(`/dashboard/${activeScenarioId}`)}
           />

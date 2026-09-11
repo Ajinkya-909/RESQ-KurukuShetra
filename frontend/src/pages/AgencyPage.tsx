@@ -14,12 +14,16 @@ import {
   ExternalLink,
   ChevronRight,
   AlertTriangle,
+  Boxes,
+  Layers,
+  HeartHandshake,
 } from 'lucide-react';
 import { TacticalMapWrapper } from '../components/Map';
 import { helpingPointsApi, allocationsApi, zonesApi, scenariosApi } from '../api';
 import { HelpingPoint, Allocation, Zone } from '../types';
 
 interface AgencyPageProps {
+  scenarioId?: string;
   onNavigateHome: () => void;
   onNavigateToDashboard: () => void;
 }
@@ -33,31 +37,35 @@ const AGENCIES = [
 ];
 
 export const AgencyPage: React.FC<AgencyPageProps> = ({
+  scenarioId,
   onNavigateHome,
   onNavigateToDashboard,
 }) => {
   const [selectedAgencyId, setSelectedAgencyId] = useState('govt');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'missions'>('inventory');
   const [depots, setDepots] = useState<HelpingPoint[]>([]);
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeScenarioId, setActiveScenarioId] = useState('scn_pune_monsoon');
+  const [activeScenarioId, setActiveScenarioId] = useState(scenarioId || 'scn_pune_monsoon');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const loadAgencyData = async () => {
     try {
       setLoading(true);
-      const [scenariosList, depotsList] = await Promise.all([
-        scenariosApi.list().catch(() => []),
+      let targetScnId = scenarioId || activeScenarioId;
+      if (!scenarioId) {
+        const scenariosList = await scenariosApi.list().catch(() => []);
+        if (scenariosList?.[0]?.scenario_id) {
+          targetScnId = scenariosList[0].scenario_id;
+        }
+      }
+      setActiveScenarioId(targetScnId);
+
+      const [depotsList, allocList, zonesList] = await Promise.all([
         helpingPointsApi.list().catch(() => []),
-      ]);
-
-      const scnId = scenariosList?.[0]?.scenario_id || 'scn_pune_monsoon';
-      setActiveScenarioId(scnId);
-
-      const [allocList, zonesList] = await Promise.all([
-        allocationsApi.list(scnId).catch(() => []),
-        zonesApi.list(scnId).catch(() => []),
+        allocationsApi.list(targetScnId).catch(() => []),
+        zonesApi.list(targetScnId).catch(() => []),
       ]);
 
       setDepots(depotsList || []);
@@ -71,8 +79,11 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
   };
 
   useEffect(() => {
+    if (scenarioId) {
+      setActiveScenarioId(scenarioId);
+    }
     loadAgencyData();
-  }, []);
+  }, [scenarioId]);
 
   // Filter depots & allocations belonging to the selected organization
   const agencyDepots = useMemo(
@@ -89,6 +100,17 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
     () => allocations.filter((a) => agencyDepotIds.has(a.point_id)),
     [allocations, agencyDepotIds]
   );
+
+  // Total committed / approved assistance stock
+  const totalApprovedStock = useMemo(() => {
+    let total = 0;
+    agencyDepots.forEach((d) => {
+      d.inventory?.forEach((item) => {
+        total += item.reserved_stock || 0;
+      });
+    });
+    return total;
+  }, [agencyDepots]);
 
   const handleDispatch = async (allocationId: number) => {
     try {
@@ -163,7 +185,7 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
             </div>
             <div>
               <h2 className="text-base font-black text-slate-900 tracking-tight">
-                Agency Dispatch Console
+                Agency Dispatch & Relief Console
               </h2>
               <p className="text-xs text-slate-500 font-medium">
                 {activeAgency.name}
@@ -190,7 +212,7 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
           <button
             onClick={loadAgencyData}
             className="p-2 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 cursor-pointer"
-            title="Refresh Fleet Telemetry"
+            title="Refresh Agency Telemetry"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -214,7 +236,7 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
         </div>
       )}
 
-      {/* 3. 100vh Split Workspace: Map on Left (65%), Missions on Right (35%) */}
+      {/* 3. 100vh Split Workspace: Map on Left (60%), Details on Right (40%) */}
       <div className="flex-1 flex flex-row overflow-hidden relative">
         {/* Left: Tactical Map */}
         <div className="flex-1 relative h-full bg-[#f8fafc] border-r border-slate-200">
@@ -230,122 +252,254 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
             <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
               <span className={`w-3 h-3 rounded-full ${activeAgency.badgeColor}`} />
               <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider">
-                Deployment Overview
+                Agency Deployment Metrics
               </h4>
             </div>
-            <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="grid grid-cols-3 gap-3 text-xs">
               <div>
-                <span className="text-slate-400 font-bold block text-[10px]">Assigned Convoys</span>
-                <span className="text-base font-black text-slate-900">{agencyAllocations.length}</span>
+                <span className="text-slate-400 font-bold block text-[10px]">Depots</span>
+                <span className="text-base font-black text-slate-900">{agencyDepots.length}</span>
               </div>
               <div>
-                <span className="text-slate-400 font-bold block text-[10px]">Active Depots</span>
-                <span className="text-base font-black text-slate-900">{agencyDepots.length}</span>
+                <span className="text-slate-400 font-bold block text-[10px]">Approved Aid</span>
+                <span className="text-base font-black text-emerald-600">{totalApprovedStock}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 font-bold block text-[10px]">Missions</span>
+                <span className="text-base font-black text-blue-600">{agencyAllocations.length}</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Right: Assigned Missions & Dispatch Ledger (35% Width) */}
-        <div className="w-96 md:w-[460px] bg-white h-full flex flex-col shrink-0 shadow-xl z-10 overflow-hidden">
-          <div className="p-4 border-b border-slate-200 bg-slate-50/80 shrink-0 flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-black text-slate-900">Assigned Missions</h3>
-              <p className="text-xs text-slate-500 font-medium">
-                Shipments originating from {activeAgency.name}
-              </p>
+        {/* Right: Agency Details & Live Stock / Missions Panel */}
+        <div className="w-[460px] lg:w-[500px] bg-white h-full flex flex-col shrink-0 shadow-xl z-10 overflow-hidden border-l border-slate-200">
+          {/* Tabs header */}
+          <div className="p-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-1 bg-slate-200/70 p-1 rounded-xl w-full">
+              <button
+                onClick={() => setActiveTab('inventory')}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  activeTab === 'inventory'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Boxes className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Helping Inventory & Aid</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('missions')}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  activeTab === 'missions'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Truck className="w-3.5 h-3.5 text-blue-600" />
+                <span>Active Missions ({agencyAllocations.length})</span>
+              </button>
             </div>
-            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800">
-              {agencyAllocations.length} Orders
-            </span>
           </div>
 
-          {/* Mission Cards Feed */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {agencyAllocations.length === 0 ? (
-              <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                <Truck className="w-10 h-10 text-slate-400 mx-auto" />
-                <h4 className="text-sm font-bold text-slate-900">No Orders Assigned</h4>
-                <p className="text-xs text-slate-500 font-medium">
-                  There are currently no active dispatch orders assigned to {activeAgency.name}.
+          {/* TAB 1: HELPING INVENTORY & COMMITTED AID */}
+          {activeTab === 'inventory' && (
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <div className="bg-emerald-50 rounded-2xl p-3.5 border border-emerald-200 space-y-1">
+                <div className="flex items-center gap-2 text-emerald-900 text-xs font-black">
+                  <HeartHandshake className="w-4 h-4 text-emerald-600" />
+                  <span>Relief Allocation Tracking</span>
+                </div>
+                <p className="text-[11px] text-emerald-700 font-medium leading-relaxed">
+                  When allocations are approved in the Command Center, resource stock is moved from <strong>Available</strong> to <strong>Approved / Helping Stock</strong> in PostgreSQL DB.
                 </p>
               </div>
-            ) : (
-              agencyAllocations.map((alloc) => (
-                <div
-                  key={alloc.allocation_id}
-                  className="p-4 rounded-2xl border border-slate-200 bg-white shadow-xs space-y-3"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-mono font-bold text-slate-400">
-                      Order #{alloc.allocation_id}
-                    </span>
-                    <span
-                      className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${
-                        alloc.status === 'delivered'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : alloc.status === 'en_route' || alloc.status === 'dispatched'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}
-                    >
-                      {alloc.status}
-                    </span>
-                  </div>
 
-                  <div className="space-y-1">
-                    <div className="text-sm font-black text-slate-900 flex items-center gap-1.5">
-                      <Package className="w-4 h-4 text-blue-600" />
-                      <span>
-                        {alloc.quantity} {alloc.resource_name || 'Emergency Aid'}
+              {agencyDepots.length === 0 ? (
+                <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                  <Building className="w-10 h-10 text-slate-400 mx-auto" />
+                  <h4 className="text-sm font-bold text-slate-900">No Helping Points Registered</h4>
+                  <p className="text-xs text-slate-500 font-medium">
+                    No depots currently registered under {activeAgency.name}.
+                  </p>
+                </div>
+              ) : (
+                agencyDepots.map((depot) => (
+                  <div key={depot.point_id} className="p-4 rounded-2xl border border-slate-200 bg-white shadow-xs space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                      <div>
+                        <h4 className="text-sm font-black text-slate-900">{depot.name}</h4>
+                        <span className="text-[11px] text-slate-500 font-semibold">
+                          Reliability: {(depot.reliability_score * 100).toFixed(0)}% • Cap: {(depot.arrangement_capability * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <span className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${
+                        depot.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        {depot.status}
                       </span>
                     </div>
-                    <div className="text-xs text-slate-600 font-medium flex items-center gap-1.5 flex-wrap">
-                      <span>Destination:</span>
-                      {alloc.report_id ? (
-                        <span className="px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-800 font-extrabold text-[11px] flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3 text-rose-600" />
-                          <span>Direct SOS Report #{alloc.report_id}</span>
-                        </span>
+
+                    {/* Stock Inventory Items Breakdown */}
+                    <div className="space-y-2">
+                      <h5 className="text-[11px] font-black uppercase text-slate-400 tracking-wider">
+                        Helping Resources Stock
+                      </h5>
+                      {(!depot.inventory || depot.inventory.length === 0) ? (
+                        <div className="text-xs text-slate-400 italic">No inventory registered for this point.</div>
                       ) : (
-                        <strong className="text-slate-800">{alloc.zone_name || `Zone #${alloc.zone_id}`}</strong>
+                        depot.inventory.map((inv) => (
+                          <div key={inv.resource_id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-extrabold text-slate-900 flex items-center gap-1.5">
+                                <Package className="w-3.5 h-3.5 text-blue-600" />
+                                <span>{inv.resource_name}</span>
+                              </span>
+                              <span className="text-[11px] font-bold text-slate-500">
+                                Total: {inv.total_stock} {inv.unit}
+                              </span>
+                            </div>
+
+                            {/* Resource Metrics grid */}
+                            <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
+                              <div className="p-1.5 rounded-lg bg-white border border-slate-200">
+                                <span className="text-slate-400 block text-[9px] font-bold uppercase">Available</span>
+                                <span className="font-black text-slate-800">{inv.available_stock} {inv.unit}</span>
+                              </div>
+
+                              <div className="p-1.5 rounded-lg bg-emerald-100/70 border border-emerald-300">
+                                <span className="text-emerald-700 block text-[9px] font-black uppercase">Approved Aid</span>
+                                <span className="font-black text-emerald-900">{inv.reserved_stock} {inv.unit}</span>
+                              </div>
+
+                              <div className="p-1.5 rounded-lg bg-blue-100/70 border border-blue-300">
+                                <span className="text-blue-700 block text-[9px] font-black uppercase">In Transit</span>
+                                <span className="font-black text-blue-900">{inv.in_transit} {inv.unit}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
                       )}
                     </div>
-                  </div>
 
-                  {/* Dispatch / Delivery Actions */}
-                  <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
-                    {alloc.status === 'confirmed' && (
-                      <button
-                        onClick={() => handleDispatch(alloc.allocation_id)}
-                        className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        <Send className="w-3.5 h-3.5" />
-                        <span>Dispatch Convoy</span>
-                      </button>
-                    )}
-
-                    {(alloc.status === 'dispatched' || alloc.status === 'en_route') && (
-                      <button
-                        onClick={() => handleDeliver(alloc.allocation_id)}
-                        className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Confirm Delivery</span>
-                      </button>
-                    )}
-
-                    {alloc.status === 'delivered' && (
-                      <div className="text-xs text-emerald-700 font-bold flex items-center gap-1">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        <span>Mission Successfully Completed</span>
+                    {/* Active Allocations assigned to this depot */}
+                    {allocations.filter((a) => a.point_id === depot.point_id).length > 0 && (
+                      <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                          Helping Destinations:
+                        </span>
+                        <div className="space-y-1">
+                          {allocations
+                            .filter((a) => a.point_id === depot.point_id)
+                            .slice(0, 3)
+                            .map((al) => (
+                              <div key={al.allocation_id} className="text-xs font-semibold text-slate-700 flex items-center justify-between bg-slate-100/70 px-2 py-1 rounded-lg">
+                                <span>
+                                  {al.quantity} {al.resource_name} → {al.report_id ? `SOS #${al.report_id}` : (al.zone_name || `Zone #${al.zone_id}`)}
+                                </span>
+                                <span className="text-[10px] font-extrabold uppercase text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                                  {al.status}
+                                </span>
+                              </div>
+                            ))}
+                        </div>
                       </div>
                     )}
                   </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* TAB 2: ACTIVE DISPATCH MISSIONS */}
+          {activeTab === 'missions' && (
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {agencyAllocations.length === 0 ? (
+                <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                  <Truck className="w-10 h-10 text-slate-400 mx-auto" />
+                  <h4 className="text-sm font-bold text-slate-900">No Active Missions</h4>
+                  <p className="text-xs text-slate-500 font-medium">
+                    There are currently no active dispatch orders assigned to {activeAgency.name}.
+                  </p>
                 </div>
-              ))
-            )}
-          </div>
+              ) : (
+                agencyAllocations.map((alloc) => (
+                  <div
+                    key={alloc.allocation_id}
+                    className="p-4 rounded-2xl border border-slate-200 bg-white shadow-xs space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono font-bold text-slate-400">
+                        Order #{alloc.allocation_id}
+                      </span>
+                      <span
+                        className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${
+                          alloc.status === 'delivered'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : alloc.status === 'en_route' || alloc.status === 'dispatched'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {alloc.status}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="text-sm font-black text-slate-900 flex items-center gap-1.5">
+                        <Package className="w-4 h-4 text-blue-600" />
+                        <span>
+                          {alloc.quantity} {alloc.resource_name || 'Emergency Aid'}
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-600 font-medium flex items-center gap-1.5 flex-wrap">
+                        <span>Destination:</span>
+                        {alloc.report_id ? (
+                          <span className="px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-800 font-extrabold text-[11px] flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3 text-rose-600" />
+                            <span>Direct SOS Report #{alloc.report_id}</span>
+                          </span>
+                        ) : (
+                          <strong className="text-slate-800">{alloc.zone_name || `Zone #${alloc.zone_id}`}</strong>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Dispatch / Delivery Actions */}
+                    <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                      {alloc.status === 'confirmed' && (
+                        <button
+                          onClick={() => handleDispatch(alloc.allocation_id)}
+                          className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span>Dispatch Convoy</span>
+                        </button>
+                      )}
+
+                      {(alloc.status === 'dispatched' || alloc.status === 'en_route') && (
+                        <button
+                          onClick={() => handleDeliver(alloc.allocation_id)}
+                          className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Confirm Delivery</span>
+                        </button>
+                      )}
+
+                      {alloc.status === 'delivered' && (
+                        <div className="text-xs text-emerald-700 font-bold flex items-center gap-1">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          <span>Mission Successfully Completed</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

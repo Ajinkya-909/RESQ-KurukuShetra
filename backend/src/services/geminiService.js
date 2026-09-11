@@ -89,7 +89,7 @@ export const analyzeIncidentWithGemini = async (context) => {
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
-  const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 
   if (!apiKey || !apiKey.trim()) {
     console.log('ℹ️ [Gemini Service] GEMINI_API_KEY not configured — using deterministic fallback reasoning');
