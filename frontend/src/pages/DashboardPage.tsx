@@ -21,10 +21,12 @@ import {
   Sparkles,
   BarChart3,
   TrendingUp,
+  Camera,
 } from 'lucide-react';
 import { TacticalMapWrapper } from '../components/Map';
 import { NewSosModal } from '../components/Modals/NewSosModal';
 import { ResponseCopilot } from '../components/ResponseCopilot/ResponseCopilot';
+import { VisualIntelligenceSection } from '../components/VisualIntelligence/VisualIntelligenceSection';
 import { dashboardApi, allocationsApi, simulationApi, auditLogApi, scenariosApi, copilotApi } from '../api';
 import { socketClient } from '../ws/socketClient';
 import { DashboardData, AuditLogItem, Zone, Report, CopilotState } from '../types';
@@ -134,27 +136,45 @@ const RightCommandPanel: React.FC<{
               <p>No active citizen SOS emergency reports filed in this corridor.</p>
             </div>
           ) : (
-            data.active_reports.map((rep) => (
-              <div key={rep.report_id} className="p-4 rounded-2xl bg-rose-50/40 border border-rose-100 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-extrabold text-rose-700 uppercase">
-                    SOS #{rep.report_id} {rep.zone_name ? `• ${rep.zone_name}` : ''}
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    {new Date(rep.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
+            data.active_reports.map((rep) => {
+              const hasVisual = rep.visual_evidence || rep.image_url || rep.image_data || rep.extracted_json?.visual_evidence;
+              return (
+                <div key={rep.report_id} className="p-4 rounded-2xl bg-rose-50/40 border border-rose-100 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-extrabold text-rose-700 uppercase flex items-center gap-1.5">
+                      <span>SOS #{rep.report_id} {rep.zone_name ? `• ${rep.zone_name}` : ''}</span>
+                      {hasVisual && (
+                        <span className="bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full text-[9px] flex items-center gap-1">
+                          <Camera className="w-3 h-3 text-indigo-600" />
+                          <span>Visual Evidence</span>
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {new Date(rep.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <p className="text-xs font-bold text-slate-800 italic">"{rep.raw_text}"</p>
+
+                  {hasVisual && (
+                    <VisualIntelligenceSection
+                      visualEvidence={rep.visual_evidence || rep.extracted_json?.visual_evidence}
+                      imageUrl={rep.image_url || rep.extracted_json?.image_url}
+                      imageData={rep.image_data || rep.extracted_json?.image_data}
+                    />
+                  )}
+
+                  <div className="flex items-center gap-3 text-[11px]">
+                    <span className="px-2.5 py-0.5 rounded-md bg-rose-100 text-rose-800 font-black">
+                      Severity Signal: {((rep.severity_signal || 0.5) * 10).toFixed(1)} / 10
+                    </span>
+                    <span className="text-slate-500 font-medium capitalize">
+                      Status: {rep.verification_status || 'verified'}
+                    </span>
+                  </div>
                 </div>
-                <p className="text-xs font-bold text-slate-800 italic">"{rep.raw_text}"</p>
-                <div className="flex items-center gap-3 text-[11px]">
-                  <span className="px-2.5 py-0.5 rounded-md bg-rose-100 text-rose-800 font-black">
-                    Severity Signal: {((rep.severity_signal || 0.5) * 10).toFixed(1)} / 10
-                  </span>
-                  <span className="text-slate-500 font-medium capitalize">
-                    Status: {rep.verification_status || 'verified'}
-                  </span>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       )}

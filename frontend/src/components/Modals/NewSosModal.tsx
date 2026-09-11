@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, AlertTriangle, Send, MapPin, CheckCircle2, RotateCcw } from 'lucide-react';
+import { X, AlertTriangle, Send, MapPin, CheckCircle2, RotateCcw, Camera, Image as ImageIcon, Trash2, Upload } from 'lucide-react';
 import L from 'leaflet';
 import { reportsApi } from '../../api';
 import { Report } from '../../types';
@@ -116,6 +116,9 @@ export const NewSosModal: React.FC<NewSosModalProps> = ({
   const [lng, setLng] = useState<number | null>(null);
   const [channelId, setChannelId] = useState<'citizen' | 'first_responder' | 'social_radio'>('citizen');
   const [neededResources, setNeededResources] = useState<string[]>([]);
+  const [imageData, setImageData] = useState<string | null>(null);
+  const [imageFileName, setImageFileName] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -130,6 +133,43 @@ export const NewSosModal: React.FC<NewSosModalProps> = ({
   const handleClearPin = () => {
     setLat(null);
     setLng(null);
+  };
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    setImageError(null);
+    if (!file) return;
+
+    // Validate type
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!validTypes.includes(file.type.toLowerCase())) {
+      setImageError('Unsupported image format. Please select JPG, PNG, or WEBP.');
+      return;
+    }
+
+    // Validate size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      setImageError('Image file size exceeds maximum limit of 5MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (typeof event.target?.result === 'string') {
+        setImageData(event.target.result);
+        setImageFileName(file.name);
+      }
+    };
+    reader.onerror = () => {
+      setImageError('Failed to read image file.');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = () => {
+    setImageData(null);
+    setImageFileName(null);
+    setImageError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -155,6 +195,7 @@ export const NewSosModal: React.FC<NewSosModalProps> = ({
         raw_text: rawText.trim(),
         source,
         needed_resources: neededResources,
+        image_data: imageData || undefined,
       });
       onReportSubmitted(res);
       onClose();
@@ -162,6 +203,8 @@ export const NewSosModal: React.FC<NewSosModalProps> = ({
       setLat(null);
       setLng(null);
       setNeededResources([]);
+      setImageData(null);
+      setImageFileName(null);
     } catch (err: any) {
       setError(err.message || 'Failed to dispatch SOS field alert');
     } finally {
@@ -315,6 +358,65 @@ export const NewSosModal: React.FC<NewSosModalProps> = ({
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Optional Field Image Upload (YOLO Visual Intelligence) */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Camera className="w-4 h-4 text-indigo-600" />
+                <span>Field Disaster Photo</span>
+                <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">OPTIONAL</span>
+              </span>
+              <span className="text-[11px] font-medium text-slate-400">YOLO Visual Intelligence</span>
+            </label>
+
+            {imageData ? (
+              <div className="relative rounded-2xl overflow-hidden border border-indigo-200 bg-slate-900 group">
+                <img
+                  src={imageData}
+                  alt="Field Evidence Preview"
+                  className="w-full h-44 object-cover object-center group-hover:opacity-90 transition-opacity"
+                />
+                <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-bold text-white shadow-lg">
+                  <ImageIcon className="w-3.5 h-3.5 text-indigo-400" />
+                  <span className="max-w-[140px] truncate">{imageFileName || 'Image Attached'}</span>
+                  <button
+                    type="button"
+                    onClick={handleRemoveImage}
+                    className="ml-1 p-0.5 text-rose-300 hover:text-rose-100 transition-colors cursor-pointer"
+                    title="Remove attached photo"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <label className="relative flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-2xl cursor-pointer bg-slate-50 hover:bg-indigo-50/40 transition-all group">
+                <div className="flex flex-col items-center justify-center pt-3 pb-3 text-center px-4">
+                  <Upload className="w-6 h-6 text-slate-400 group-hover:text-indigo-600 group-hover:scale-110 transition-all mb-1" />
+                  <p className="text-xs font-bold text-slate-700">
+                    <span className="text-indigo-600">Click to upload photo</span> or drag & drop
+                  </p>
+                  <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                    JPG, PNG, WEBP up to 5MB (Analyzed by YOLO object detector)
+                  </p>
+                </div>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  onChange={handleImageFileChange}
+                  className="hidden"
+                />
+              </label>
+            )}
+
+            {imageError && (
+              <div className="p-2 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-600 flex-shrink-0" />
+                <span>{imageError}</span>
+              </div>
+            )}
           </div>
 
           {/* Source Selector */}

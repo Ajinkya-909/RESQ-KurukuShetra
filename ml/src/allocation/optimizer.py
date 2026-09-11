@@ -96,8 +96,8 @@ def optimize_allocations(
                 if len(requesting_zones) > 1 and available_stock > 0:
                     for z in requesting_zones:
                         z_id = z["zone_id"]
-                        # Target SOS zone gets higher cap allowance (90%), normal zones capped at 75%
-                        cap_ratio = 0.90 if z.get("is_sos_target") else 0.75
+                        # Critical high-severity & SOS target zones get full supply priority (1.0), normal zones capped at 75%
+                        cap_ratio = 1.0 if (z.get("is_sos_target") or float(z.get("severity_score", 0.0)) >= 0.80) else 0.75
                         cap = max(1.0, available_stock * cap_ratio)
                         solver.Add(x[(z_id, hp_id, r)] <= cap)
 

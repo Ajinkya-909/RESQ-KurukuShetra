@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, ShieldAlert, CheckCircle2, AlertTriangle, MapPin, Check, XCircle, Brain } from 'lucide-react';
 import { CopilotIncident } from '../../types';
 import { allocationsApi } from '../../api';
+import { VisualIntelligenceSection } from '../VisualIntelligence/VisualIntelligenceSection';
 
 interface ResponseReviewModalProps {
   isOpen: boolean;
@@ -169,6 +170,15 @@ export const ResponseReviewModal: React.FC<ResponseReviewModalProps> = ({
                 <strong>Urgency Factor:</strong> {aiBrief.urgency_explanation}
               </div>
             </div>
+          )}
+
+          {/* 📸 Visual Intelligence & YOLO Field Evidence */}
+          {(incident as any).visual_evidence && (
+            <VisualIntelligenceSection
+              visualEvidence={(incident as any).visual_evidence}
+              imageUrl={(incident as any).image_url}
+              imageData={(incident as any).image_data}
+            />
           )}
 
           {/* Ground-Truth WHY? Reasoning */}

@@ -266,5 +266,26 @@ const healthCheck = async () => {
   }
 };
 
-export { processReport, initialAllocation, tick, healthCheck };
-export default { processReport, initialAllocation, tick, healthCheck };
+/**
+ * Run standalone YOLO visual intelligence analysis on an emergency field image.
+ */
+const analyzeVision = async (imageInput, confidenceThreshold = 0.40) => {
+  try {
+    const { data } = await client.post('/vision/analyze', {
+      image_input: imageInput,
+      confidence_threshold: confidenceThreshold,
+    });
+    return data;
+  } catch (err) {
+    console.error('⚠️ [ML Client] analyzeVision call failed:', err.message);
+    return {
+      success: false,
+      error: err.message,
+      detections: [],
+    };
+  }
+};
+
+export { processReport, initialAllocation, tick, healthCheck, analyzeVision };
+export default { processReport, initialAllocation, tick, healthCheck, analyzeVision };
+

@@ -31,7 +31,7 @@ def test_health_endpoint():
     data = response.json()
     assert data["status"] == "healthy"
     assert data["service"] == "RESQ ML Service"
-    assert data["version"] == "1.0.0"
+    assert data["version"] == "2.0.0"
 
 def test_predict_severity_valid():
     response = client.post("/predict/severity", json=VALID_PAYLOAD)

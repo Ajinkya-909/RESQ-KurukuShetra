@@ -95,6 +95,29 @@ export interface ResourceType {
 }
 
 // ── Field SOS Reports ────────────────────────────────────────
+export interface VisualDetection {
+  class_name: string;
+  confidence: number;
+  bbox: {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+  };
+}
+
+export interface VisualEvidence {
+  success: boolean;
+  model: string;
+  detections: VisualDetection[];
+  image_width?: number;
+  image_height?: number;
+  annotated_image?: string;
+  analyzed_at?: string;
+  error?: string;
+  inference_time_ms?: number;
+}
+
 export interface Report {
   report_id: number;
   scenario_id: string;
@@ -107,8 +130,14 @@ export interface Report {
     incident_type?: string;
     stranded_count?: number;
     medical_need?: string;
-    required_resources?: Array<{ resource: string; min_qty: number }>;
+    required_resources?: Array<{ resource: string; min_qty: number }> | string[];
+    image_url?: string;
+    image_data?: string;
+    visual_evidence?: VisualEvidence;
   } | null;
+  image_url?: string;
+  image_data?: string;
+  visual_evidence?: VisualEvidence;
   severity_signal: number;
   verification_status: 'unverified' | 'verified' | 'duplicate' | 'rejected';
   source: string;

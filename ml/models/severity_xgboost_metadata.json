@@ -1,7 +1,7 @@
 {
   "model_name": "xgboost_severity_agent",
   "model_version": "1.0.0",
-  "training_date": "2026-09-11T17:48:03.366840",
+  "training_date": "2026-09-12T03:25:43.897856",
   "dataset_path": "ml/data/raw/disaster_severity_dataset.csv",
   "total_samples": 10000,
   "feature_names": [

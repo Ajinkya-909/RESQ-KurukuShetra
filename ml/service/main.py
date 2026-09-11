@@ -288,6 +288,20 @@ def process_report(body: Dict[str, Any]) -> Dict[str, Any]:
                     + f"requested: {', '.join(extracted.get('required_resources', [])) or 'general relief'}.",
             })
 
+        # Check for optional attached field image
+        image_input = report.get("image_input") or report.get("image_url") or report.get("image_base64")
+        if image_input:
+            try:
+                from ml.vision.detector import analyze_image
+                print(f"📷 [ML Service] Running YOLO visual detection on report image...")
+                vis_result = analyze_image(image_input)
+                extracted["visual_evidence"] = vis_result
+                if vis_result.get("success"):
+                    dets_summary = ", ".join([f"{d['class_name']} ({int(d['confidence']*100)}%)" for d in vis_result.get("detections", [])])
+                    print(f"   YOLO Detections: {dets_summary if dets_summary else 'No objects detected above threshold'}")
+            except Exception as vis_err:
+                print(f"⚠️ [ML Service] Vision analysis skipped due to error: {vis_err}")
+
         return {
             "report_update": {
                 "report_id": report.get("report_id"),
@@ -488,6 +502,34 @@ def simulation_tick(body: Dict[str, Any]) -> Dict[str, Any]:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Tick error: {str(e)}")
 
+
+# ──────────────────────────────────────────────────────────────
+# Visual Intelligence Endpoint (YOLO)
+# ──────────────────────────────────────────────────────────────
+
+class VisionAnalyzeRequest(BaseModel):
+    image_input: str = Field(..., description="File path, base64 data-url, or image reference")
+    confidence_threshold: Optional[float] = Field(default=None, description="Optional confidence score threshold [0.0, 1.0]")
+
+@app.post("/vision/analyze", tags=["Vision"])
+def analyze_vision(request: VisionAnalyzeRequest) -> Dict[str, Any]:
+    """
+    Analyzes an SOS field photo using YOLO object detection.
+    Returns structured visual evidence (bounding boxes, class labels, confidence scores).
+    Does NOT alter existing XGBoost severity or OR-Tools resource allocation.
+    """
+    try:
+        from ml.vision.detector import analyze_image, CONFIDENCE_THRESHOLD
+        thresh = request.confidence_threshold if request.confidence_threshold is not None else CONFIDENCE_THRESHOLD
+        result = analyze_image(request.image_input, confidence_threshold=thresh)
+        return result
+    except Exception as e:
+        print(f"❌ [Vision] API analyze error: {e}")
+        return {
+            "success": False,
+            "error": f"Vision analysis error: {str(e)}",
+            "detections": []
+        }
 
 # ──────────────────────────────────────────────────────────────
 # Utility Functions

@@ -45,7 +45,7 @@ const calculateTextSimilarity = (textA = '', textB = '') => {
 router.post('/', async (req, res, next) => {
   try {
     const { scenarioId } = req.params;
-    const { lat, lng, raw_text, source = 'field_report', needed_resources = [] } = req.body;
+    const { lat, lng, raw_text, source = 'field_report', needed_resources = [], image_url, image_data } = req.body;
 
     if (lat == null || lng == null || !raw_text) {
       throw createError(400, 'VALIDATION_ERROR', 'lat, lng, and raw_text are required');
@@ -78,6 +78,10 @@ router.post('/', async (req, res, next) => {
       zone_id = enclosingZone.zone_id;
     }
 
+    const initialExtracted = {};
+    if (image_url) initialExtracted.image_url = image_url;
+    if (image_data) initialExtracted.image_data = image_data;
+
     const report = await prisma.report.create({
       data: {
         scenario_id: scenarioId,
@@ -86,6 +90,7 @@ router.post('/', async (req, res, next) => {
         lng: parseFloat(lng),
         raw_text,
         source,
+        extracted_json: Object.keys(initialExtracted).length > 0 ? initialExtracted : undefined,
         verification_status: 'unverified',
       },
     });
@@ -97,15 +102,20 @@ router.post('/', async (req, res, next) => {
         agent_name: 'system',
         zone_id,
         report_id: report.report_id,
-        reasoning_text: `SOS received at (${lat}, ${lng}) — ${zone_id ? `assigned to Zone "${enclosingZone?.name}" (${Math.round(minDist)}m from center)` : `isolated/out-of-corridor (${Math.round(minDist)}m from nearest zone)`}${needed_resources.length ? `. Requested: ${needed_resources.join(', ')}` : ''}`,
+        reasoning_text: `SOS received at (${lat}, ${lng}) — ${zone_id ? `assigned to Zone "${enclosingZone?.name}" (${Math.round(minDist)}m from center)` : `isolated/out-of-corridor (${Math.round(minDist)}m from nearest zone)`}${needed_resources.length ? `. Requested: ${needed_resources.join(', ')}` : ''}${image_url || image_data ? ' (Field Photo attached)' : ''}`,
       },
     });
 
     broadcastToScenario(scenarioId, 'report.received', report);
     res.status(202).json({ ...report, processing_status: 'queued' });
 
-    // Attach needed_resources for ML & direct allocation processing
-    const reportWithNeeds = { ...report, needed_resources };
+    // Attach needed_resources & image for ML & direct allocation processing
+    const reportWithNeeds = {
+      ...report,
+      needed_resources,
+      image_url: image_url || report.extracted_json?.image_url,
+      image_data: image_data || report.extracted_json?.image_data
+    };
 
     // Async verification, duplicate detection & direct allocation pipeline
     processReportAsync(reportWithNeeds, scenarioId).catch((err) =>
@@ -454,6 +464,45 @@ router.get('/:reportId', async (req, res, next) => {
         status:        a.status,
       })),
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── POST /api/scenarios/:scenarioId/reports/:reportId/visual-analysis ──
+router.post('/:reportId/visual-analysis', async (req, res, next) => {
+  try {
+    const { scenarioId, reportId } = req.params;
+    const report = await prisma.report.findFirst({
+      where: { report_id: parseInt(reportId, 10), scenario_id: scenarioId },
+    });
+    if (!report) throw createError(404, 'NOT_FOUND', `Report #${reportId} not found`);
+
+    const imageInput =
+      req.body.image_input ||
+      req.body.image_url ||
+      req.body.image_data ||
+      report.extracted_json?.image_data ||
+      report.extracted_json?.image_url;
+
+    if (!imageInput) {
+      throw createError(400, 'VALIDATION_ERROR', 'No image input provided for visual analysis');
+    }
+
+    const visualResult = await mlClient.analyzeVision(imageInput, req.body.confidence_threshold);
+
+    const currentExtracted = report.extracted_json && typeof report.extracted_json === 'object' ? report.extracted_json : {};
+    const updatedExtracted = {
+      ...currentExtracted,
+      visual_evidence: visualResult,
+    };
+
+    await prisma.report.update({
+      where: { report_id: report.report_id },
+      data: { extracted_json: updatedExtracted },
+    });
+
+    res.json(visualResult);
   } catch (err) {
     next(err);
   }
