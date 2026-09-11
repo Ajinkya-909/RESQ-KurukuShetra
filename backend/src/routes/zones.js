@@ -44,6 +44,12 @@ router.post('/', async (req, res, next) => {
       throw createError(400, 'VALIDATION_ERROR', `severity_level must be one of: ${SEVERITY_LEVELS.join(', ')}`);
     }
 
+    // Validate scenario exists
+    const scenario = await prisma.scenario.findUnique({ where: { scenario_id: scenarioId } });
+    if (!scenario) {
+      throw createError(404, 'NOT_FOUND', `Scenario "${scenarioId}" not found`);
+    }
+
     const zone = await prisma.zone.create({
       data: { scenario_id: scenarioId, name, center_lat, center_lng, radius_m, disaster_type, severity_level, severity_score, population_estimate },
       include: INCLUDE_NEEDS,

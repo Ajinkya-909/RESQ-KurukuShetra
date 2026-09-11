@@ -14,6 +14,8 @@ export const reportsApi = {
       raw_text: string;
       source?: string;
       needed_resources?: string[];
+      image_url?: string;
+      image_data?: string;
     }
   ) => api.post<Report & { processing_status: string }>(`/scenarios/${scenarioId}/reports`, data),
 };

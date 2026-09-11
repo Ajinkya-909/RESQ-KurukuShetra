@@ -19,6 +19,8 @@ import dashboardRouter from './routes/dashboard.js';
 import auditLogRouter from './routes/auditLog.js';
 import simulationRouter from './routes/simulation.js';
 
+import copilotRouter from './routes/copilot.js';
+
 // Middleware
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -29,8 +31,8 @@ app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   credentials: true,
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Request logger (development only)
 if (process.env.NODE_ENV === 'development') {
@@ -59,6 +61,7 @@ app.use('/api/scenarios/:scenarioId/allocations',  allocationsRouter);
 app.use('/api/scenarios/:scenarioId/dashboard',    dashboardRouter);
 app.use('/api/scenarios/:scenarioId/audit-log',    auditLogRouter);
 app.use('/api/scenarios/:scenarioId/simulation',   simulationRouter);
+app.use('/api/scenarios/:scenarioId/copilot',      copilotRouter);
 
 // ── 404 Handler ──────────────────────────────────────────────
 app.use((_req, res) => {

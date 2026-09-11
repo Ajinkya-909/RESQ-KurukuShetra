@@ -21,12 +21,16 @@ import {
   Sparkles,
   BarChart3,
   TrendingUp,
+  Camera,
 } from 'lucide-react';
 import { TacticalMapWrapper } from '../components/Map';
 import { NewSosModal } from '../components/Modals/NewSosModal';
-import { dashboardApi, allocationsApi, simulationApi, auditLogApi, scenariosApi } from '../api';
+import { ConfirmationModal } from '../components/ConfirmationModal';
+import { ResponseCopilot } from '../components/ResponseCopilot/ResponseCopilot';
+import { VisualIntelligenceSection } from '../components/VisualIntelligence/VisualIntelligenceSection';
+import { dashboardApi, allocationsApi, simulationApi, auditLogApi, scenariosApi, copilotApi } from '../api';
 import { socketClient } from '../ws/socketClient';
-import { DashboardData, AuditLogItem, Zone, Report } from '../types';
+import { DashboardData, AuditLogItem, Zone, Report, CopilotState } from '../types';
 
 interface DashboardPageProps {
   scenarioId: string;
@@ -34,165 +38,206 @@ interface DashboardPageProps {
   onOpenSetup: () => void;
 }
 
-// Right Panel Component with Tabs for SOS Alerts & Pending Resource Approvals
+// Right Panel Component with Tabs for SOS Alerts, INSIGHTS & Pending Resource Approvals
 const RightCommandPanel: React.FC<{
   data: DashboardData | null;
   handleApprove: (id: number) => void;
   handleReject: (id: number) => void;
   setIsSosModalOpen: (open: boolean) => void;
-}> = ({ data, handleApprove, handleReject, setIsSosModalOpen }) => {
-  const [activeTab, setActiveTab] = useState<'sos' | 'approvals'>('approvals');
+  copilotState: CopilotState | null;
+  copilotLoading: boolean;
+  loadDashboard: (showLoading?: boolean) => Promise<void>;
+  setMapCenter: (center: { lat: number; lng: number }) => void;
+  setMapZoom: (zoom: number) => void;
+}> = ({
+  data,
+  handleApprove,
+  handleReject,
+  setIsSosModalOpen,
+  copilotState,
+  copilotLoading,
+  loadDashboard,
+  setMapCenter,
+  setMapZoom,
+}) => {
+    const [activeTab, setActiveTab] = useState<'approvals' | 'sos' | 'insights'>('approvals');
 
-  return (
-    <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 shadow-md p-5 flex flex-col h-[560px] overflow-hidden">
-      {/* Tab Switcher Header */}
-      <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
-        <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200/80">
-          <button
-            onClick={() => setActiveTab('approvals')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${
-              activeTab === 'approvals'
-                ? 'bg-white text-blue-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Shield className="w-3.5 h-3.5 text-blue-600" />
-            <span>Resource Approvals</span>
-            {data?.pending_approvals && data.pending_approvals.length > 0 && (
-              <span className="px-1.5 py-0.2 bg-amber-500 text-white rounded-full text-[10px]">
-                {data.pending_approvals.length}
-              </span>
-            )}
-          </button>
+    return (
+      <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 shadow-md p-5 flex flex-col h-[560px] overflow-hidden">
+        {/* Tab Switcher Header */}
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
+          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200/80 overflow-x-auto">
+            {/* 1. Approvals Tab (First) */}
+            <button
+              onClick={() => setActiveTab('approvals')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'approvals'
+                  ? 'bg-white text-blue-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+                }`}
+            >
+              <Shield className="w-3.5 h-3.5 text-blue-600" />
+              <span>Approvals</span>
+              {data?.pending_approvals && data.pending_approvals.length > 0 && (
+                <span className="px-1.5 py-0.2 bg-amber-500 text-white rounded-full text-[10px]">
+                  {data.pending_approvals.length}
+                </span>
+              )}
+            </button>
+
+            {/* 2. SOS Alerts Tab (Second) */}
+            <button
+              onClick={() => setActiveTab('sos')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'sos'
+                  ? 'bg-white text-rose-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+                }`}
+            >
+              <Radio className="w-3.5 h-3.5 text-rose-600 animate-pulse" />
+              <span>SOS Alerts</span>
+              {data?.active_reports && data.active_reports.length > 0 && (
+                <span className="px-1.5 py-0.2 bg-rose-600 text-white rounded-full text-[10px]">
+                  {data.active_reports.length}
+                </span>
+              )}
+            </button>
+
+            {/* 3. Insights Tab (Third) */}
+            <button
+              onClick={() => setActiveTab('insights')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'insights'
+                  ? 'bg-white text-indigo-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+                }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+              <span>INSIGHTS</span>
+              {copilotState?.incidents && copilotState.incidents.length > 0 && (
+                <span className="px-1.5 py-0.2 bg-indigo-600 text-white rounded-full text-[10px]">
+                  {copilotState.incidents.length}
+                </span>
+              )}
+            </button>
+          </div>
 
           <button
-            onClick={() => setActiveTab('sos')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${
-              activeTab === 'sos'
-                ? 'bg-white text-rose-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
+            onClick={() => setIsSosModalOpen(true)}
+            className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1 shrink-0 ml-1"
           >
-            <Radio className="w-3.5 h-3.5 text-rose-600 animate-pulse" />
-            <span>SOS Alerts</span>
-            {data?.active_reports && data.active_reports.length > 0 && (
-              <span className="px-1.5 py-0.2 bg-rose-600 text-white rounded-full text-[10px]">
-                {data.active_reports.length}
-              </span>
-            )}
+            <Plus className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Report SOS</span>
           </button>
         </div>
 
-        <button
-          onClick={() => setIsSosModalOpen(true)}
-          className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-extrabold transition-all cursor-pointer flex items-center gap-1"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Report SOS</span>
-        </button>
-      </div>
 
-      {/* Tab 1: Pending Resource Approvals */}
-      {activeTab === 'approvals' && (
-        <div className="flex-1 overflow-y-auto pt-4 space-y-3 pr-1">
-          {(!data?.pending_approvals || data.pending_approvals.length === 0) ? (
-            <div className="p-12 text-center bg-slate-50 rounded-3xl border border-slate-200 text-xs text-slate-500 font-medium space-y-3 my-auto">
-              <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
-              <h4 className="text-sm font-black text-slate-900">All Proposals Processed</h4>
-              <p className="text-slate-500">
-                No pending resource allocations awaiting Commander review. Advance +1h Tick or submit an SOS Report to trigger next agent optimization cycle.
-              </p>
-            </div>
-          ) : (
-            data.pending_approvals.map((alloc) => (
-              <div
-                key={alloc.allocation_id}
-                className={`p-4 rounded-2xl border transition-all space-y-3 ${
-                  alloc.report_id
-                    ? 'bg-rose-50/30 border-rose-200 hover:border-rose-400 shadow-sm'
-                    : 'bg-slate-50/60 border-slate-200 hover:border-blue-400'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono font-bold text-slate-400">Allocation #{alloc.allocation_id}</span>
-                    {alloc.report_id && (
-                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-rose-600 text-white shadow-sm flex items-center gap-1">
-                        <AlertTriangle className="w-3 h-3" />
-                        <span>Target: SOS Report #{alloc.report_id}</span>
-                      </span>
+        {/* Tab 1: Pending Resource Approvals */}
+        {activeTab === 'approvals' && (
+          <div className="flex-1 overflow-y-auto pt-4 space-y-3 pr-1">
+            {(!data?.pending_approvals || data.pending_approvals.length === 0) ? (
+              <div className="p-12 text-center bg-slate-50 rounded-3xl border border-slate-200 text-xs text-slate-500 font-medium space-y-3 my-auto">
+                <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
+                <h4 className="text-sm font-black text-slate-900">All Proposals Processed</h4>
+                <p className="text-slate-500">
+                  No pending resource allocations awaiting Commander review. Advance +1h Tick or submit an SOS Report to trigger next agent optimization cycle.
+                </p>
+              </div>
+            ) : (
+              data.pending_approvals.map((alloc) => (
+                <div
+                  key={alloc.allocation_id}
+                  className={`p-4 rounded-2xl border transition-all space-y-3 ${alloc.report_id
+                      ? 'bg-rose-50/30 border-rose-200 hover:border-rose-400 shadow-sm'
+                      : 'bg-slate-50/60 border-slate-200 hover:border-blue-400'
+                    }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-bold text-slate-400">Allocation #{alloc.allocation_id}</span>
+                      {alloc.report_id && (
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-rose-600 text-white shadow-sm flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" />
+                          <span>Target: SOS Report #{alloc.report_id}</span>
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+                      Awaiting Approval
+                    </span>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="text-sm font-black text-slate-900 flex items-center gap-1.5">
+                      <Package className="w-4 h-4 text-blue-600" />
+                      <span>{alloc.quantity} {alloc.resource_name}</span>
+                    </div>
+                    <div className="text-xs text-slate-600 font-medium">
+                      From: <strong className="text-slate-800">{alloc.point_name}</strong> → To: <strong className="text-blue-700">{alloc.zone_name}</strong>
+                    </div>
+                    {alloc.report_text && (
+                      <div className="text-xs font-semibold text-rose-800 italic bg-rose-50 p-2 rounded-xl border border-rose-100 mt-1">
+                        "{alloc.report_text}"
+                      </div>
                     )}
                   </div>
-                  <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
-                    Awaiting Approval
-                  </span>
-                </div>
 
-                <div className="space-y-1">
-                  <div className="text-sm font-black text-slate-900 flex items-center gap-1.5">
-                    <Package className="w-4 h-4 text-blue-600" />
-                    <span>{alloc.quantity} {alloc.resource_name}</span>
-                  </div>
-                  <div className="text-xs text-slate-600 font-medium">
-                    From: <strong className="text-slate-800">{alloc.point_name}</strong> → To: <strong className="text-blue-700">{alloc.zone_name}</strong>
-                  </div>
-                  {alloc.report_text && (
-                    <div className="text-xs font-semibold text-rose-800 italic bg-rose-50 p-2 rounded-xl border border-rose-100 mt-1">
-                      "{alloc.report_text}"
+                  {/* Explainable AI Reasoning Box */}
+                  {alloc.reasoning && (
+                    <div className="p-3 rounded-xl bg-white border border-slate-200/90 text-xs space-y-1">
+                      <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-indigo-700">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>AI Reasoning Logic:</span>
+                      </div>
+                      <p className="text-slate-600 font-medium text-[11px] leading-relaxed">
+                        {alloc.reasoning}
+                      </p>
                     </div>
                   )}
-                </div>
 
-                {/* Explainable AI Reasoning Box */}
-                {alloc.reasoning && (
-                  <div className="p-3 rounded-xl bg-white border border-slate-200/90 text-xs space-y-1">
-                    <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-indigo-700">
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>AI Reasoning Logic:</span>
-                    </div>
-                    <p className="text-slate-600 font-medium text-[11px] leading-relaxed">
-                      {alloc.reasoning}
-                    </p>
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={() => setConfirmAction({
+                        type: 'approve',
+                        allocationId: alloc.allocation_id,
+                        title: `Approve Dispatch Proposal #${alloc.allocation_id}?`,
+                        message: `Are you sure you want to approve allocating ${alloc.quantity} ${alloc.resource_name} from ${alloc.point_name} to ${alloc.zone_name}?`,
+                        variant: 'success',
+                      })}
+                      className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Approve Dispatch</span>
+                    </button>
+                    <button
+                      onClick={() => setConfirmAction({
+                        type: 'reject',
+                        allocationId: alloc.allocation_id,
+                        title: `Reject Proposal #${alloc.allocation_id}?`,
+                        message: `Are you sure you want to reject this proposed dispatch of ${alloc.quantity} ${alloc.resource_name}?`,
+                        variant: 'danger',
+                      })}
+                      className="flex-1 py-2 rounded-xl bg-white hover:bg-rose-50 border border-slate-200 text-rose-600 hover:border-rose-300 text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                      <span>Reject</span>
+                    </button>
                   </div>
-                )}
-
-                {/* Action Buttons */}
-                <div className="flex items-center gap-2 pt-1">
-                  <button
-                    onClick={() => handleApprove(alloc.allocation_id)}
-                    className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Approve Dispatch</span>
-                  </button>
-                  <button
-                    onClick={() => handleReject(alloc.allocation_id)}
-                    className="flex-1 py-2 rounded-xl bg-white hover:bg-rose-50 border border-slate-200 text-rose-600 hover:border-rose-300 text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <XCircle className="w-3.5 h-3.5" />
-                    <span>Reject</span>
-                  </button>
                 </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
+              ))
+            )}
+          </div>
+        )}
 
-      {/* Tab 2: SOS Alerts Emergency Stream */}
-      {activeTab === 'sos' && (
-        <div className="flex-1 overflow-y-auto pt-4 space-y-3 pr-1">
-          {(!data?.active_reports || data.active_reports.length === 0) ? (
-            <div className="p-12 text-center bg-slate-50 rounded-3xl border border-slate-200 text-xs text-slate-500 font-medium space-y-2 my-auto">
-              <Radio className="w-10 h-10 text-slate-400 mx-auto" />
-              <p>No active citizen SOS emergency reports filed in this corridor.</p>
-            </div>
-          ) : (
-            data.active_reports.map((rep) => {
-              // Find all pending proposed allocations targeting this specific report
-              const reportProposals = (data?.pending_approvals || []).filter(
-                (a) => a.report_id === rep.report_id
-              );
+        {/* Tab 2: SOS Alerts Emergency Stream */}
+        {activeTab === 'sos' && (
+          <div className="flex-1 overflow-y-auto pt-4 space-y-3 pr-1">
+            {(!data?.active_reports || data.active_reports.length === 0) ? (
+              <div className="p-12 text-center bg-slate-50 rounded-3xl border border-slate-200 text-xs text-slate-500 font-medium space-y-2 my-auto">
+                <Radio className="w-10 h-10 text-slate-400 mx-auto" />
+                <p>No active citizen SOS emergency reports filed in this corridor.</p>
+              </div>
+            ) : (
+              Array.from(new Map(data.active_reports.map((r) => [r.report_id, r])).values()).map((rep) => {
+                const hasVisual = rep.visual_evidence || rep.image_url || rep.image_data || rep.extracted_json?.visual_evidence;
 
               return (
                 <div key={rep.report_id} className={`p-4 rounded-2xl border space-y-3 shadow-sm ${
@@ -211,85 +256,76 @@ const RightCommandPanel: React.FC<{
                       {new Date(rep.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
-
-                  <p className="text-xs font-bold text-slate-800 italic">"{rep.raw_text}"</p>
-
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className={`px-2.5 py-0.5 rounded-md font-black ${
-                      rep.verification_status === 'duplicate'
-                        ? 'bg-amber-100 text-amber-900'
-                        : 'bg-rose-100 text-rose-800'
+                return (
+                  <div key={rep.report_id} className={`p-4 rounded-2xl border space-y-3 shadow-sm ${rep.verification_status === 'duplicate'
+                      ? 'bg-amber-50/50 border-amber-300'
+                      : 'bg-rose-50/40 border-rose-200'
                     }`}>
-                      {rep.verification_status === 'duplicate'
-                        ? '⚠️ Duplicate Cluster Flagged'
-                        : `Severity Signal: ${((rep.severity_signal || 0.5) * 10).toFixed(1)} / 10`}
-                    </span>
-                    <span className="text-slate-500 font-medium capitalize">
-                      Status: <strong className={rep.verification_status === 'duplicate' ? 'text-amber-700' : 'text-emerald-700'}>{rep.verification_status || 'verified'}</strong>
-                    </span>
-                  </div>
-
-                  {/* Proposed Resource Allocations for THIS SOS Report */}
-                  <div className="mt-2 pt-2 border-t border-rose-100 space-y-2">
-                    <div className="text-[11px] font-black text-slate-700 uppercase tracking-wider flex items-center justify-between">
-                      <span className="flex items-center gap-1">
-                        <Package className="w-3.5 h-3.5 text-blue-600" />
-                        <span>Direct SOS Dispatches ({reportProposals.length})</span>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className={`font-extrabold uppercase flex items-center gap-1.5 ${rep.verification_status === 'duplicate' ? 'text-amber-800' : 'text-rose-700'
+                        }`}>
+                        <Radio className={`w-3.5 h-3.5 ${rep.verification_status === 'duplicate' ? 'text-amber-600' : 'text-rose-600 animate-pulse'}`} />
+                        <span>SOS #{rep.report_id} {rep.zone_name ? `• ${rep.zone_name}` : ''}</span>
+                        {hasVisual && (
+                          <span className="bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full text-[9px] flex items-center gap-1">
+                            <Camera className="w-3 h-3 text-indigo-600" />
+                            <span>Visual Evidence</span>
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {new Date(rep.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
 
-                    {rep.verification_status === 'duplicate' ? (
-                      <p className="text-[11px] text-amber-800 font-medium italic bg-amber-50 p-2 rounded-xl border border-amber-200">
-                        Linked to existing incident cluster. Redundant duplicate dispatches suppressed to avoid over-saturating zone.
-                      </p>
-                    ) : reportProposals.length === 0 ? (
-                      <p className="text-[11px] text-slate-500 italic">
-                        Allocations approved or dispatched to target coordinates.
-                      </p>
-                    ) : (
-                      reportProposals.map((alloc) => (
-                        <div
-                          key={alloc.allocation_id}
-                          className="p-2.5 rounded-xl bg-white border border-rose-200 flex items-center justify-between gap-2 shadow-2xs"
-                        >
-                          <div className="text-xs">
-                            <span className="font-bold text-slate-900 block">
-                              {alloc.quantity} {alloc.resource_name}
-                            </span>
-                            <span className="text-[10px] text-slate-500">
-                              From: <strong>{alloc.point_name}</strong> → <span className="text-rose-700 font-bold">Direct SOS Location</span>
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => handleApprove(alloc.allocation_id)}
-                              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-sm transition-all flex items-center gap-1 cursor-pointer"
-                              title="Approve this direct dispatch for SOS report"
-                            >
-                              <CheckCircle2 className="w-3 h-3" />
-                              <span>Dispatch</span>
-                            </button>
-                            <button
-                              onClick={() => handleReject(alloc.allocation_id)}
-                              className="px-2 py-1.5 rounded-lg bg-slate-100 hover:bg-rose-50 text-rose-600 text-[11px] font-bold transition-all cursor-pointer"
-                              title="Reject allocation"
-                            >
-                              <XCircle className="w-3 h-3" />
-                            </button>
-                          </div>
-                        </div>
-                      ))
+                    <p className="text-xs font-bold text-slate-800 italic">"{rep.raw_text}"</p>
+
+                    {hasVisual && (
+                      <VisualIntelligenceSection
+                        visualEvidence={rep.visual_evidence || rep.extracted_json?.visual_evidence}
+                        imageUrl={rep.image_url || rep.extracted_json?.image_url}
+                        imageData={rep.image_data || rep.extracted_json?.image_data}
+                      />
                     )}
+
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className={`px-2.5 py-0.5 rounded-md font-black ${rep.verification_status === 'duplicate'
+                          ? 'bg-amber-100 text-amber-900'
+                          : 'bg-rose-100 text-rose-800'
+                        }`}>
+                        {rep.verification_status === 'duplicate'
+                          ? '⚠️ Duplicate Cluster Flagged'
+                          : `Severity Signal: ${((rep.severity_signal || 0.5) * 10).toFixed(1)} / 10`}
+                      </span>
+                      <span className="text-slate-500 font-medium capitalize">
+                        Status: <strong className={rep.verification_status === 'duplicate' ? 'text-amber-700' : 'text-emerald-700'}>{rep.verification_status || 'verified'}</strong>
+                      </span>
+                    </div>
                   </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {/* Tab 3: RESQ AI Response Copilot Insights */}
+        {activeTab === 'insights' && (
+          <div className="flex-1 overflow-y-auto pt-3 space-y-3 pr-1">
+            <ResponseCopilot
+              copilotState={copilotState}
+              loading={copilotLoading}
+              onRefresh={() => loadDashboard(false)}
+              onViewOnMap={(lat, lng) => {
+                setMapCenter({ lat, lng });
+                setMapZoom(14);
+              }}
+              data={data}
+            />
+          </div>
+        )}
+      </div>
+    );
+  };
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({
   scenarioId,
@@ -297,6 +333,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   onOpenSetup,
 }) => {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [copilotState, setCopilotState] = useState<CopilotState | null>(null);
+  const [copilotLoading, setCopilotLoading] = useState(false);
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | undefined>(undefined);
+  const [mapZoom, setMapZoom] = useState<number | undefined>(undefined);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [ticking, setTicking] = useState(false);
@@ -304,15 +344,24 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const [isSosModalOpen, setIsSosModalOpen] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
   const [isValidId, setIsValidId] = useState<boolean | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{
+    type: 'approve' | 'reject';
+    allocationId: number;
+    title: string;
+    message: string;
+    variant?: 'success' | 'danger';
+  } | null>(null);
 
-  // 1. Fetch Dashboard & Audit Log Payload with ID Validation
+  // 1. Fetch Dashboard, Copilot & Audit Log Payload with ID Validation
   const loadDashboard = useCallback(async (showLoading = false) => {
     try {
       if (showLoading) setLoading(true);
-      const [dashResult, logsResult] = await Promise.all([
+      setCopilotLoading(true);
+
+      const [dashResult, copilotResult, logsResult] = await Promise.all([
         dashboardApi.getDashboard(scenarioId).catch(() => null),
+        copilotApi.getCopilotState(scenarioId).catch(() => null),
         auditLogApi.list(scenarioId, { limit: 25 }).catch(() => null),
       ]);
 
@@ -328,6 +377,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           setIsValidId(false);
         }
       }
+
+      if (copilotResult) {
+        setCopilotState(copilotResult);
+      }
+
       if (logsResult && logsResult.logs) {
         setAuditLogs(logsResult.logs);
       }
@@ -335,6 +389,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       console.warn('Dashboard fetch notice:', err.message);
       setIsValidId(false);
     } finally {
+      setCopilotLoading(false);
       if (showLoading) setLoading(false);
     }
   }, [scenarioId]);
@@ -467,6 +522,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     }
   };
 
+  const executeConfirmedAction = () => {
+    if (!confirmAction) return;
+    const { type, allocationId } = confirmAction;
+    setConfirmAction(null);
+    if (type === 'approve') {
+      handleApprove(allocationId);
+    } else {
+      handleReject(allocationId);
+    }
+  };
+
   // 4. Simulation Engine Controls
   const handleAdvanceTick = async () => {
     try {
@@ -511,10 +577,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const scenarioStatus = data?.scenario?.status || 'running';
   const simTime = data?.scenario?.sim_time
     ? new Date(data.scenario.sim_time).toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      })
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    })
     : '12:00:00 PM';
 
   // Derived KPI values
@@ -606,16 +672,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               {disasterType}
             </span>
             <span
-              className={`text-xs uppercase font-black px-2.5 py-0.5 rounded-md flex items-center gap-1.5 ${
-                scenarioStatus === 'running'
+              className={`text-xs uppercase font-black px-2.5 py-0.5 rounded-md flex items-center gap-1.5 ${scenarioStatus === 'running'
                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                   : 'bg-amber-50 text-amber-700 border border-amber-200'
-              }`}
+                }`}
             >
               <span
-                className={`w-2 h-2 rounded-full ${
-                  scenarioStatus === 'running' ? 'bg-emerald-600 animate-pulse' : 'bg-amber-500'
-                }`}
+                className={`w-2 h-2 rounded-full ${scenarioStatus === 'running' ? 'bg-emerald-600 animate-pulse' : 'bg-amber-500'
+                  }`}
               />
               <span>{scenarioStatus}</span>
             </span>
@@ -632,16 +696,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 
         <div className="flex items-center gap-3">
           <div
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${
-              wsConnected
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${wsConnected
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                 : 'bg-slate-100 text-slate-600 border-slate-200'
-            }`}
+              }`}
           >
             <span
-              className={`w-2 h-2 rounded-full ${
-                wsConnected ? 'bg-emerald-600 animate-ping' : 'bg-slate-400'
-              }`}
+              className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-emerald-600 animate-ping' : 'bg-slate-400'
+                }`}
             />
             <span className="hidden sm:inline">{wsConnected ? 'Live Socket Sync' : 'Reconnecting...'}</span>
           </div>
@@ -776,9 +838,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       {/* 3. Feedback Banner */}
       {feedback && (
         <div
-          className={`px-6 py-2.5 text-xs font-bold flex items-center justify-between shadow-xs shrink-0 ${
-            feedback.type === 'error' ? 'bg-rose-600 text-white' : 'bg-blue-600 text-white'
-          }`}
+          className={`px-6 py-2.5 text-xs font-bold flex items-center justify-between shadow-xs shrink-0 ${feedback.type === 'error' ? 'bg-rose-600 text-white' : 'bg-blue-600 text-white'
+            }`}
         >
           <div className="flex items-center gap-2">
             {feedback.type === 'error' ? (
@@ -818,6 +879,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             {/* Map Canvas */}
             <div className="flex-1 relative mt-3 rounded-2xl overflow-hidden border border-slate-200">
               <TacticalMapWrapper
+                center={mapCenter}
+                zoom={mapZoom}
                 zones={data?.zones || []}
                 helpingPoints={data?.helping_points || []}
                 reports={data?.active_reports || []}
@@ -876,6 +939,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             handleApprove={handleApprove}
             handleReject={handleReject}
             setIsSosModalOpen={setIsSosModalOpen}
+            copilotState={copilotState}
+            copilotLoading={copilotLoading}
+            loadDashboard={loadDashboard}
+            setMapCenter={setMapCenter}
+            setMapZoom={setMapZoom}
           />
         </section>
 
@@ -996,13 +1064,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               <div key={zone.zone_id} className="p-5 rounded-3xl bg-slate-50/70 border border-slate-200 space-y-4 shadow-xs">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-black text-slate-900">{zone.name}</h4>
-                  <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
-                    zone.severity_level === 'critical'
+                  <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${zone.severity_level === 'critical'
                       ? 'bg-rose-100 text-rose-800 border-rose-200'
                       : zone.severity_level === 'high'
-                      ? 'bg-amber-100 text-amber-800 border-amber-200'
-                      : 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                  }`}>
+                        ? 'bg-amber-100 text-amber-800 border-amber-200'
+                        : 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                    }`}>
                     {zone.severity_level}
                   </span>
                 </div>
@@ -1168,6 +1235,18 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           });
           loadDashboard(false);
         }}
+      />
+
+      {/* 6. Human-in-the-Loop Confirmation Modal for Approvals / Rejections */}
+      <ConfirmationModal
+        isOpen={Boolean(confirmAction)}
+        title={confirmAction?.title || ''}
+        message={confirmAction?.message || ''}
+        confirmLabel={confirmAction?.type === 'approve' ? 'Approve Dispatch' : 'Reject Proposal'}
+        cancelLabel="Cancel"
+        variant={confirmAction?.variant || (confirmAction?.type === 'approve' ? 'success' : 'danger')}
+        onConfirm={executeConfirmedAction}
+        onCancel={() => setConfirmAction(null)}
       />
     </div>
   );
