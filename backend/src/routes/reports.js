@@ -30,9 +30,13 @@ router.post('/', async (req, res, next) => {
       throw createError(400, 'VALIDATION_ERROR', 'lat, lng, and raw_text are required');
     }
 
+    // Validate scenario exists
+    const scenario = await prisma.scenario.findUnique({ where: { scenario_id: scenarioId } });
+    if (!scenario) throw createError(404, 'NOT_FOUND', `Scenario "${scenarioId}" not found`);
+
     // Determine enclosing zone via haversine
     const zones = await prisma.zone.findMany({
-      where: { scenario_id: scenarioId, status: 'active' },
+      where: { scenario_id: scenarioId },
       select: { zone_id: true, center_lat: true, center_lng: true, radius_m: true },
     });
 
@@ -44,7 +48,7 @@ router.post('/', async (req, res, next) => {
     }
 
     const report = await prisma.report.create({
-      data: { scenario_id: scenarioId, zone_id, lat, lng, raw_text, source },
+      data: { scenario_id: scenarioId, zone_id, lat: parseFloat(lat), lng: parseFloat(lng), raw_text, source },
     });
 
     await prisma.auditLog.create({
@@ -103,7 +107,7 @@ const processReportAsync = async (report, scenarioId) => {
     });
   }
 
-  // Insert proposed allocations
+  // Insert proposed allocations for micro-SOS report targeting exact SOS pin
   if ((mlResult.proposed_allocations || []).length > 0) {
     await prisma.allocation.createMany({
       data: mlResult.proposed_allocations.map((a) => ({
@@ -113,8 +117,8 @@ const processReportAsync = async (report, scenarioId) => {
         point_id:    a.point_id,
         resource_id: a.resource_id,
         quantity:    a.quantity,
-        target_lat:  a.target_lat,
-        target_lng:  a.target_lng,
+        target_lat:  report.lat,
+        target_lng:  report.lng,
       })),
     });
   }

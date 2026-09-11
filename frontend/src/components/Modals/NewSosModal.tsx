@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
-import { X, AlertTriangle, Radio, Send, MapPin } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, AlertTriangle, Send, MapPin, CheckCircle2, RotateCcw } from 'lucide-react';
+import L from 'leaflet';
 import { reportsApi } from '../../api';
 import { Report } from '../../types';
+import { DEFAULT_MAP_CENTER, VOYAGER_LIGHT_TILES } from '../Map/mapStyles';
+import { getDroppedPinLeafletIcon } from '../Map/markerIcons';
 
 interface NewSosModalProps {
   isOpen: boolean;
@@ -10,6 +13,98 @@ interface NewSosModalProps {
   onReportSubmitted: (report: Report) => void;
 }
 
+interface SosMapPickerProps {
+  lat: number | null;
+  lng: number | null;
+  onSelectLocation: (lat: number, lng: number) => void;
+}
+
+const SosMapPicker: React.FC<SosMapPickerProps> = ({ lat, lng, onSelectLocation }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const markerRef = useRef<L.Marker | null>(null);
+
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+
+    const initialCenter: [number, number] =
+      lat !== null && lng !== null
+        ? [lat, lng]
+        : [DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng];
+
+    const map = L.map(containerRef.current, {
+      center: initialCenter,
+      zoom: 13,
+      zoomControl: true,
+    });
+
+    L.tileLayer(VOYAGER_LIGHT_TILES.url, {
+      attribution: VOYAGER_LIGHT_TILES.attribution,
+      subdomains: 'abcd',
+      maxZoom: 19,
+    }).addTo(map);
+
+    map.on('click', (e: L.LeafletMouseEvent) => {
+      onSelectLocation(e.latlng.lat, e.latlng.lng);
+    });
+
+    mapRef.current = map;
+
+    // Leaflet modal size recalculation fixes
+    const timer1 = setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
+
+    const timer2 = setTimeout(() => {
+      map.invalidateSize();
+    }, 300);
+
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      resizeObserver.disconnect();
+      map.remove();
+      mapRef.current = null;
+      markerRef.current = null;
+    };
+  }, []);
+
+  // Update marker position when lat / lng changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (lat !== null && lng !== null) {
+      if (markerRef.current) {
+        markerRef.current.setLatLng([lat, lng]);
+      } else {
+        const marker = L.marker([lat, lng], {
+          icon: getDroppedPinLeafletIcon('critical'),
+        }).addTo(map);
+        markerRef.current = marker;
+      }
+    } else {
+      if (markerRef.current) {
+        markerRef.current.remove();
+        markerRef.current = null;
+      }
+    }
+  }, [lat, lng]);
+
+  return (
+    <div className="relative w-full h-[260px] rounded-2xl overflow-hidden border border-slate-200 shadow-inner group">
+      <div ref={containerRef} className="w-full h-full cursor-crosshair z-0" />
+    </div>
+  );
+};
+
 export const NewSosModal: React.FC<NewSosModalProps> = ({
   isOpen,
   onClose,
@@ -17,13 +112,18 @@ export const NewSosModal: React.FC<NewSosModalProps> = ({
   onReportSubmitted,
 }) => {
   const [rawText, setRawText] = useState('');
-  const [lat, setLat] = useState(18.5280);
-  const [lng, setLng] = useState(73.8650);
-  const [source, setSource] = useState('citizen');
+  const [lat, setLat] = useState<number | null>(null);
+  const [lng, setLng] = useState<number | null>(null);
+  const [channelId, setChannelId] = useState<'citizen' | 'first_responder' | 'social_radio'>('citizen');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const handleClearPin = () => {
+    setLat(null);
+    setLng(null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +131,17 @@ export const NewSosModal: React.FC<NewSosModalProps> = ({
       setError('Emergency transcript is required.');
       return;
     }
+
+    if (lat === null || lng === null) {
+      setError('Please pin the SOS location on the map.');
+      return;
+    }
+
+    // Preserve backend source mapping:
+    // Citizen Phone -> field_report
+    // First Responder -> agency_update
+    // Social / Radio -> agency_update
+    const source = channelId === 'citizen' ? 'field_report' : 'agency_update';
 
     try {
       setSubmitting(true);
@@ -44,6 +155,8 @@ export const NewSosModal: React.FC<NewSosModalProps> = ({
       onReportSubmitted(res);
       onClose();
       setRawText('');
+      setLat(null);
+      setLng(null);
     } catch (err: any) {
       setError(err.message || 'Failed to dispatch SOS field alert');
     } finally {
@@ -53,9 +166,9 @@ export const NewSosModal: React.FC<NewSosModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-      <div className="w-full max-w-lg bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden font-sans">
+      <div className="w-full max-w-xl bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden font-sans max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="px-6 py-5 bg-rose-50 border-b border-rose-100 flex items-center justify-between">
+        <div className="px-6 py-5 bg-rose-50 border-b border-rose-100 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center shadow-md shadow-rose-500/20">
               <AlertTriangle className="w-5 h-5 text-white" />
@@ -76,7 +189,7 @@ export const NewSosModal: React.FC<NewSosModalProps> = ({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto">
           {error && (
             <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
@@ -99,35 +212,66 @@ export const NewSosModal: React.FC<NewSosModalProps> = ({
             />
           </div>
 
-          {/* Coordinates Grid */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                <span>Latitude</span>
+          {/* SOS Location Section with Interactive Map */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <MapPin className="w-4 h-4 text-rose-600" />
+                <span>SOS Location</span>
+                <span className="text-rose-500">*</span>
               </label>
-              <input
-                type="number"
-                step="0.0001"
-                required
-                value={lat}
-                onChange={(e) => setLat(Number(e.target.value))}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-600 text-sm font-bold text-slate-900 outline-none"
-              />
+
+              {lat !== null && lng !== null ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Location pinned</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleClearPin}
+                    className="text-[11px] font-bold text-slate-500 hover:text-rose-600 flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
+                    title="Clear location pin"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Clear Pin</span>
+                  </button>
+                </div>
+              ) : (
+                <span className="text-xs font-medium text-slate-500">
+                  Click on the map to pin the emergency location
+                </span>
+              )}
             </div>
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                <span>Longitude</span>
-              </label>
-              <input
-                type="number"
-                step="0.0001"
-                required
-                value={lng}
-                onChange={(e) => setLng(Number(e.target.value))}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-blue-600 text-sm font-bold text-slate-900 outline-none"
-              />
+
+            {/* Interactive Leaflet Map */}
+            <SosMapPicker
+              lat={lat}
+              lng={lng}
+              onSelectLocation={(selectedLat, selectedLng) => {
+                setLat(selectedLat);
+                setLng(selectedLng);
+                if (error) setError(null);
+              }}
+            />
+
+            {/* Coordinates Read-Only Display */}
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between text-xs font-mono">
+              <div className="flex items-center gap-4">
+                <div>
+                  <span className="text-slate-400 font-sans font-bold uppercase tracking-wider text-[10px] mr-1.5">Latitude:</span>
+                  <span className="font-bold text-slate-800">
+                    {lat !== null ? lat.toFixed(6) : 'Not selected'}
+                  </span>
+                </div>
+                <div className="h-3 w-px bg-slate-300" />
+                <div>
+                  <span className="text-slate-400 font-sans font-bold uppercase tracking-wider text-[10px] mr-1.5">Longitude:</span>
+                  <span className="font-bold text-slate-800">
+                    {lng !== null ? lng.toFixed(6) : 'Not selected'}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -140,14 +284,14 @@ export const NewSosModal: React.FC<NewSosModalProps> = ({
               {[
                 { id: 'citizen', label: 'Citizen Phone' },
                 { id: 'first_responder', label: 'First Responder' },
-                { id: 'social_media', label: 'Social / Radio' },
+                { id: 'social_radio', label: 'Social / Radio' },
               ].map((s) => (
                 <button
                   key={s.id}
                   type="button"
-                  onClick={() => setSource(s.id)}
+                  onClick={() => setChannelId(s.id as any)}
                   className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                    source === s.id
+                    channelId === s.id
                       ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
                       : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
                   }`}
@@ -181,3 +325,4 @@ export const NewSosModal: React.FC<NewSosModalProps> = ({
     </div>
   );
 };
+

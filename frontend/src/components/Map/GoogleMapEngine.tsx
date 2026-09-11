@@ -217,6 +217,11 @@ export const GoogleMapEngine: React.FC<TacticalMapProps> = ({
     }
   }, [tempZone, mapReady]);
 
+  // Console diagnostic for map rendering verification
+  useEffect(() => {
+    console.log(`🗺️ [GoogleMapEngine] Render cycle -> Zones: ${zones.length}, Depots/HelpingPoints: ${helpingPoints.length}, Reports: ${reports.length}, SupplyLines: ${supplyLines.length}, mapReady: ${mapReady}`);
+  }, [zones.length, helpingPoints.length, reports.length, supplyLines.length, mapReady]);
+
   // 2. MANAGE SAVED ZONES (Synchronously Remove Circles on Deletion)
   useEffect(() => {
     if (!mapRef.current || !mapReady || !(window as any).google?.maps) return;
@@ -295,15 +300,22 @@ export const GoogleMapEngine: React.FC<TacticalMapProps> = ({
         }}
       >
 
-
-        {/* 3. Helping Points (Depots) - Decisive Hub Marker */}
+        {/* 3. Helping Points (Depots) - Decisive Hub Marker (Priority zIndex 100) */}
         {activeLayers.depots &&
           helpingPoints.map((point) => {
             const agencyColor = AGENCY_COLORS[point.type] || '#2563EB';
+            const sizeObj = (window as any).google?.maps?.Size
+              ? new (window as any).google.maps.Size(34, 43)
+              : undefined;
+            const anchorObj = (window as any).google?.maps?.Point
+              ? new (window as any).google.maps.Point(17, 43)
+              : undefined;
+
             return (
               <Marker
                 key={`point-${point.point_id}`}
                 position={{ lat: point.lat, lng: point.lng }}
+                zIndex={100}
                 onClick={() => {
                   setActiveInfoWindow({
                     type: 'depot',
@@ -320,24 +332,21 @@ export const GoogleMapEngine: React.FC<TacticalMapProps> = ({
                       <text x="19" y="22" font-size="10" font-weight="900" fill="${agencyColor}" text-anchor="middle" font-family="sans-serif">HUB</text>
                     </svg>
                   `)}`,
-                  scaledSize: (window as any).google?.maps?.Size
-                    ? new (window as any).google.maps.Size(34, 43)
-                    : undefined,
-                  anchor: (window as any).google?.maps?.Point
-                    ? new (window as any).google.maps.Point(17, 43)
-                    : undefined,
+                  scaledSize: sizeObj,
+                  anchor: anchorObj,
                 }}
-                title={`[DEPOT] ${point.name}`}
+                title={`[DEPOT HUB] ${point.name}`}
               />
             );
           })}
 
-        {/* 4. SOS Field Reports */}
+        {/* 4. SOS Field Reports (Priority zIndex 150) */}
         {activeLayers.reports &&
           reports.map((report) => (
             <Marker
               key={`report-${report.report_id}`}
               position={{ lat: report.lat, lng: report.lng }}
+              zIndex={150}
               onClick={() => {
                 setActiveInfoWindow({
                   type: 'report',
@@ -347,14 +356,21 @@ export const GoogleMapEngine: React.FC<TacticalMapProps> = ({
                 onReportClick?.(report);
               }}
               icon={{
-                path: (window as any).google?.maps?.SymbolPath?.BACKWARD_CLOSED_ARROW ?? 1,
-                scale: 6,
-                fillColor: '#DC2626',
-                fillOpacity: 1,
-                strokeColor: '#FFFFFF',
-                strokeWeight: 1.5,
+                url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`
+                  <svg width="32" height="42" viewBox="0 0 32 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M16 2C8.3 2 2 8.3 2 16C2 25 15 40 16 41C17 40 30 25 30 16C30 8.3 23.7 2 16 2Z" fill="#DC2626"/>
+                    <circle cx="16" cy="15" r="7" fill="#FFFFFF"/>
+                    <text x="16" y="19" font-size="9" font-weight="900" fill="#DC2626" text-anchor="middle" font-family="sans-serif">SOS</text>
+                  </svg>
+                `)}`,
+                scaledSize: (window as any).google?.maps?.Size
+                  ? new (window as any).google.maps.Size(30, 39)
+                  : undefined,
+                anchor: (window as any).google?.maps?.Point
+                  ? new (window as any).google.maps.Point(15, 39)
+                  : undefined,
               }}
-              title={`SOS #${report.report_id}`}
+              title={`SOS Incident #${report.report_id}`}
             />
           ))}
 

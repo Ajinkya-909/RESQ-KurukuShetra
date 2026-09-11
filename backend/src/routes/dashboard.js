@@ -49,9 +49,9 @@ router.get('/', async (req, res, next) => {
         orderBy: { severity_signal: 'desc' },
       }),
 
-      // Supply lines for map (active allocations)
+      // Supply lines for map (active approved allocations only: confirmed & en_route)
       prisma.allocation.findMany({
-        where: { scenario_id: scenarioId, status: { in: ['confirmed', 'en_route', 'proposed'] } },
+        where: { scenario_id: scenarioId, status: { in: ['confirmed', 'en_route'] } },
         select: {
           allocation_id: true, status: true, quantity: true, target_lat: true, target_lng: true,
           helping_point: { select: { name: true, lat: true, lng: true } },

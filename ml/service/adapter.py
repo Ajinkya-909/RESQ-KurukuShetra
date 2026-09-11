@@ -243,6 +243,7 @@ def map_allocations_to_db_format(
     adapted_zones: List[Dict[str, Any]],
     adapted_points: List[Dict[str, Any]],
     resource_name_to_id: Dict[str, int],
+    report: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Convert OR-Tools optimizer output back into DB-shaped allocation rows
@@ -258,6 +259,10 @@ def map_allocations_to_db_format(
 
     db_allocations: List[Dict[str, Any]] = []
 
+    # If triggering report exists with valid GPS coordinates, target the exact micro-SOS pin
+    report_lat = (report.get("lat") if report.get("lat") is not None else report.get("latitude")) if report else None
+    report_lng = (report.get("lng") if report.get("lng") is not None else report.get("longitude")) if report else None
+
     for alloc in optimizer_result.get("allocations", []):
         z_id = str(alloc["zone_id"])
         hp_id = str(alloc["helping_point_id"])
@@ -270,13 +275,17 @@ def map_allocations_to_db_format(
         z_meta = zone_meta.get(z_id, {})
         hp_meta = point_meta.get(hp_id, {})
 
+        # Micro-SOS allocation targets report coordinates; Macro allocation targets zone center
+        target_lat = report_lat if report_lat is not None else z_meta.get("_center_lat", 0.0)
+        target_lng = report_lng if report_lng is not None else z_meta.get("_center_lng", 0.0)
+
         db_allocations.append({
             "zone_id": int(z_id) if z_id.isdigit() else 0,
             "point_id": int(hp_id) if hp_id.isdigit() else 0,
             "resource_id": resource_name_to_id.get(res_name, 0),
             "quantity": round(qty, 2),
-            "target_lat": z_meta.get("_center_lat", 0.0),
-            "target_lng": z_meta.get("_center_lng", 0.0),
+            "target_lat": target_lat,
+            "target_lng": target_lng,
         })
 
     return db_allocations

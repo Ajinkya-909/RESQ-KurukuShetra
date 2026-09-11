@@ -11,6 +11,11 @@ export const TacticalMapWrapper: React.FC<TacticalMapProps> = (props) => {
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const hasApiKey = Boolean(apiKey.trim());
 
+  // Engine selection state: 'google' or 'leaflet' (defaults to Google Maps if key present, else Leaflet)
+  const [selectedEngine, setSelectedEngine] = useState<'google' | 'leaflet'>(
+    hasApiKey ? 'google' : 'leaflet'
+  );
+
   // Default internal layer toggle state if not controlled externally
   const [internalLayers, setInternalLayers] = useState<MapLayersState>({
     zones: true,
@@ -33,13 +38,13 @@ export const TacticalMapWrapper: React.FC<TacticalMapProps> = (props) => {
     preventGoogleFontsLoading: true,
   });
 
-  // Determine which engine to render
-  const shouldUseGoogleMaps = hasApiKey && isLoaded && !loadError;
+  // Render Google Maps if selected and loaded, else fallback to Leaflet cleanly without error warnings
+  const renderGoogleMaps = selectedEngine === 'google' && isLoaded && !loadError;
 
   return (
     <div className={`relative w-full h-full overflow-hidden ${props.className || ''}`}>
       {/* Map Canvas */}
-      {shouldUseGoogleMaps ? (
+      {renderGoogleMaps ? (
         <GoogleMapEngine {...props} activeLayers={activeLayers} />
       ) : (
         <LeafletMapEngine {...props} activeLayers={activeLayers} />
@@ -47,14 +52,31 @@ export const TacticalMapWrapper: React.FC<TacticalMapProps> = (props) => {
 
       {/* Engine Status & Layer Controls Overlay (Top Right) - Clean Light Style */}
       <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2">
-        {/* Engine Badge */}
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/95 border border-slate-200 text-xs font-semibold text-slate-700 shadow-md backdrop-blur-md">
-          <span
-            className={`w-2.5 h-2.5 rounded-full ${
-              shouldUseGoogleMaps ? 'bg-blue-600' : 'bg-emerald-500'
-            } animate-pulse`}
-          />
-          <span>{shouldUseGoogleMaps ? 'Google Maps (Light)' : 'Voyager Light Map'}</span>
+        {/* Interactive Engine Switcher Toggle Button */}
+        <div className="flex items-center gap-1 bg-white/95 p-1 rounded-full border border-slate-200 shadow-md backdrop-blur-md">
+          <button
+            onClick={() => setSelectedEngine('google')}
+            className={`px-3 py-1 rounded-full text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer ${
+              selectedEngine === 'google'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <span className={`w-2 h-2 rounded-full ${selectedEngine === 'google' ? 'bg-white' : 'bg-blue-600'}`} />
+            <span>Google Maps</span>
+          </button>
+
+          <button
+            onClick={() => setSelectedEngine('leaflet')}
+            className={`px-3 py-1 rounded-full text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer ${
+              selectedEngine === 'leaflet'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <span className={`w-2 h-2 rounded-full ${selectedEngine === 'leaflet' ? 'bg-white' : 'bg-emerald-600'}`} />
+            <span>Leaflet Map</span>
+          </button>
         </div>
 
         {/* Layers Button */}

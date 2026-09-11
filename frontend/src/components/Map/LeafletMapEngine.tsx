@@ -114,12 +114,25 @@ export const LeafletMapEngine: React.FC<TacticalMapProps> = ({
       maxZoom: 19,
     }).addTo(map);
 
+    // Create custom map panes for explicit z-index hierarchy
+    const supplyPane = map.createPane('supplyLinesPane');
+    supplyPane.style.zIndex = '400';
+
+    const zonesPane = map.createPane('zonesPane');
+    zonesPane.style.zIndex = '450';
+
+    const depotsPane = map.createPane('depotsPane');
+    depotsPane.style.zIndex = '600';
+
+    const reportsPane = map.createPane('reportsPane');
+    reportsPane.style.zIndex = '650';
+
     // Attach layer groups
-    zonesLayerRef.current.addTo(map);
-    depotsLayerRef.current.addTo(map);
-    reportsLayerRef.current.addTo(map);
-    supplyLinesLayerRef.current.addTo(map);
-    tempZoneLayerRef.current.addTo(map);
+    zonesLayerRef.current = L.layerGroup([], { pane: 'zonesPane' }).addTo(map);
+    depotsLayerRef.current = L.layerGroup([], { pane: 'depotsPane' }).addTo(map);
+    reportsLayerRef.current = L.layerGroup([], { pane: 'reportsPane' }).addTo(map);
+    supplyLinesLayerRef.current = L.layerGroup([], { pane: 'supplyLinesPane' }).addTo(map);
+    tempZoneLayerRef.current = L.layerGroup([], { pane: 'zonesPane' }).addTo(map);
 
     // Map Click Listener — robust click capture
     map.on('click', (e: L.LeafletMouseEvent) => {
@@ -133,6 +146,11 @@ export const LeafletMapEngine: React.FC<TacticalMapProps> = ({
       mapRef.current = null;
     };
   }, []);
+
+  // Diagnostic logging for map rendering verification
+  useEffect(() => {
+    console.log(`🗺️ [LeafletMapEngine] Render cycle -> Zones: ${zones.length}, Depots/HelpingPoints: ${helpingPoints.length}, Reports: ${reports.length}, SupplyLines: ${supplyLines.length}`);
+  }, [zones.length, helpingPoints.length, reports.length, supplyLines.length]);
 
   // Update center when prop changes
   useEffect(() => {

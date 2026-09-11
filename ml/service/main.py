@@ -209,7 +209,7 @@ def process_report(body: Dict[str, Any]) -> Dict[str, Any]:
                 try:
                     opt_result = optimize_allocations(adapted_zones, adapted_points)
                     proposed_allocations = map_allocations_to_db_format(
-                        opt_result, adapted_zones, adapted_points, res_name_to_id
+                        opt_result, adapted_zones, adapted_points, res_name_to_id, report
                     )
                 except Exception as opt_err:
                     print(f"⚠️ Optimizer warning: {opt_err}")
