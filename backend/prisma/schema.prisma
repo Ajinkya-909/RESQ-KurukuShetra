@@ -1,0 +1,226 @@
+// This is your Prisma schema file.
+// Matches the RESQ PostgreSQL schema v2.0 exactly.
+// After editing, run: npx prisma generate
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── resource_types ──────────────────────────────────────────
+model ResourceType {
+  resource_id Int    @id @default(autoincrement())
+  name        String @unique
+  unit        String
+
+  inventory    HelpingPointInventory[]
+  zone_needs   ZoneNeed[]
+  allocations  Allocation[]
+
+  @@map("resource_types")
+}
+
+// ── scenarios ───────────────────────────────────────────────
+model Scenario {
+  scenario_id   String   @id
+  name          String
+  description   String?
+  disaster_type String   @default("flood")
+  status        String   @default("setup")
+  sim_time      DateTime @default(now()) @db.Timestamptz()
+  created_at    DateTime @default(now()) @db.Timestamptz()
+  updated_at    DateTime @default(now()) @db.Timestamptz()
+
+  zones            Zone[]
+  reports          Report[]
+  allocations      Allocation[]
+  duplicate_flags  DuplicateFlag[]
+  audit_log        AuditLog[]
+
+  @@map("scenarios")
+}
+
+// ── helping_points ──────────────────────────────────────────
+model HelpingPoint {
+  point_id                Int      @id @default(autoincrement())
+  name                    String
+  type                    String
+  lat                     Float
+  lng                     Float
+  reliability_score       Float    @default(1.0)
+  arrangement_capability  Float    @default(0.0)
+  status                  String   @default("active")
+  created_at              DateTime @default(now()) @db.Timestamptz()
+
+  inventory         HelpingPointInventory[]
+  allocations       Allocation[]
+  audit_log         AuditLog[]
+
+  @@map("helping_points")
+}
+
+// ── helping_point_inventory ──────────────────────────────────
+model HelpingPointInventory {
+  id              Int   @id @default(autoincrement())
+  point_id        Int
+  resource_id     Int
+  total_stock     Float @default(0)
+  available_stock Float @default(0)
+  reserved_stock  Float @default(0)
+  in_transit      Float @default(0)
+  max_capacity    Float @default(0)
+  replenish_rate  Float @default(0)
+
+  helping_point HelpingPoint @relation(fields: [point_id], references: [point_id], onDelete: Cascade)
+  resource_type ResourceType @relation(fields: [resource_id], references: [resource_id], onDelete: Cascade)
+
+  @@unique([point_id, resource_id])
+  @@map("helping_point_inventory")
+}
+
+// ── zones ────────────────────────────────────────────────────
+model Zone {
+  zone_id             Int      @id @default(autoincrement())
+  scenario_id         String
+  name                String
+  center_lat          Float
+  center_lng          Float
+  radius_m            Float
+  disaster_type       String   @default("flood")
+  severity_score      Float    @default(0.0)
+  severity_level      String   @default("low")
+  confidence_score    Float    @default(1.0)
+  population_estimate Int      @default(0)
+  status              String   @default("active")
+  created_at          DateTime @default(now()) @db.Timestamptz()
+  updated_at          DateTime @default(now()) @db.Timestamptz()
+
+  scenario        Scenario      @relation(fields: [scenario_id], references: [scenario_id], onDelete: Cascade)
+  zone_needs      ZoneNeed[]
+  reports         Report[]
+  allocations     Allocation[]
+  duplicate_flags DuplicateFlag[]
+  audit_log       AuditLog[]
+
+  @@map("zones")
+}
+
+// ── zone_needs ───────────────────────────────────────────────
+model ZoneNeed {
+  id                 Int    @id @default(autoincrement())
+  zone_id            Int
+  resource_id        Int
+  quantity_needed    Float  @default(0)
+  quantity_fulfilled Float  @default(0)
+  fulfillment_status String @default("shortage")
+
+  zone          Zone         @relation(fields: [zone_id], references: [zone_id], onDelete: Cascade)
+  resource_type ResourceType @relation(fields: [resource_id], references: [resource_id], onDelete: Cascade)
+
+  @@unique([zone_id, resource_id])
+  @@map("zone_needs")
+}
+
+// ── reports ──────────────────────────────────────────────────
+model Report {
+  report_id           Int      @id @default(autoincrement())
+  scenario_id         String
+  zone_id             Int?
+  lat                 Float
+  lng                 Float
+  raw_text            String
+  extracted_json      Json?
+  severity_signal     Float    @default(0.5)
+  verification_status String   @default("unverified")
+  source              String   @default("field_report")
+  created_at          DateTime @default(now()) @db.Timestamptz()
+
+  scenario        Scenario       @relation(fields: [scenario_id], references: [scenario_id], onDelete: Cascade)
+  zone            Zone?          @relation(fields: [zone_id], references: [zone_id], onDelete: SetNull)
+  allocations     Allocation[]
+  duplicate_flags_1 DuplicateFlag[] @relation("DuplicateReport1")
+  duplicate_flags_2 DuplicateFlag[] @relation("DuplicateReport2")
+  audit_log       AuditLog[]
+
+  @@map("reports")
+}
+
+// ── allocations ──────────────────────────────────────────────
+model Allocation {
+  allocation_id       Int       @id @default(autoincrement())
+  scenario_id         String
+  zone_id             Int
+  report_id           Int?
+  point_id            Int
+  resource_id         Int
+  quantity            Float
+  target_lat          Float
+  target_lng          Float
+  status              String    @default("proposed")
+  hold_reason         String?
+  eta                 DateTime? @db.Timestamptz()
+  exhaustion_estimate DateTime? @db.Timestamptz()
+  created_at          DateTime  @default(now()) @db.Timestamptz()
+  updated_at          DateTime  @default(now()) @db.Timestamptz()
+
+  scenario      Scenario     @relation(fields: [scenario_id], references: [scenario_id], onDelete: Cascade)
+  zone          Zone         @relation(fields: [zone_id], references: [zone_id], onDelete: Cascade)
+  report        Report?      @relation(fields: [report_id], references: [report_id], onDelete: SetNull)
+  helping_point HelpingPoint @relation(fields: [point_id], references: [point_id], onDelete: Cascade)
+  resource_type ResourceType @relation(fields: [resource_id], references: [resource_id], onDelete: Cascade)
+  duplicate_flags_1 DuplicateFlag[] @relation("DuplicateAllocation1")
+  duplicate_flags_2 DuplicateFlag[] @relation("DuplicateAllocation2")
+  audit_log     AuditLog[]
+
+  @@map("allocations")
+}
+
+// ── duplicate_flags ──────────────────────────────────────────
+model DuplicateFlag {
+  flag_id         Int      @id @default(autoincrement())
+  scenario_id     String
+  zone_id         Int?
+  report_id_1     Int?
+  report_id_2     Int?
+  allocation_id_1 Int?
+  allocation_id_2 Int?
+  duplicate_score Float    @default(0.0)
+  resolution      String   @default("needs_review")
+  created_at      DateTime @default(now()) @db.Timestamptz()
+
+  scenario       Scenario    @relation(fields: [scenario_id], references: [scenario_id], onDelete: Cascade)
+  zone           Zone?       @relation(fields: [zone_id], references: [zone_id], onDelete: SetNull)
+  report_1       Report?     @relation("DuplicateReport1", fields: [report_id_1], references: [report_id], onDelete: SetNull)
+  report_2       Report?     @relation("DuplicateReport2", fields: [report_id_2], references: [report_id], onDelete: SetNull)
+  allocation_1   Allocation? @relation("DuplicateAllocation1", fields: [allocation_id_1], references: [allocation_id], onDelete: SetNull)
+  allocation_2   Allocation? @relation("DuplicateAllocation2", fields: [allocation_id_2], references: [allocation_id], onDelete: SetNull)
+
+  @@map("duplicate_flags")
+}
+
+// ── audit_log ─────────────────────────────────────────────────
+model AuditLog {
+  log_id         Int      @id @default(autoincrement())
+  scenario_id    String
+  event_type     String
+  agent_name     String   @default("system")
+  zone_id        Int?
+  point_id       Int?
+  allocation_id  Int?
+  report_id      Int?
+  reasoning_text String
+  metadata       Json?
+  created_at     DateTime @default(now()) @db.Timestamptz()
+
+  scenario      Scenario     @relation(fields: [scenario_id], references: [scenario_id], onDelete: Cascade)
+  zone          Zone?        @relation(fields: [zone_id], references: [zone_id], onDelete: SetNull)
+  helping_point HelpingPoint? @relation(fields: [point_id], references: [point_id], onDelete: SetNull)
+  allocation    Allocation?  @relation(fields: [allocation_id], references: [allocation_id], onDelete: SetNull)
+  report        Report?      @relation(fields: [report_id], references: [report_id], onDelete: SetNull)
+
+  @@map("audit_log")
+}

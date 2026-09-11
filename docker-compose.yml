@@ -1,0 +1,26 @@
+version: "3.8"
+
+services:
+  # ─── PostgreSQL Database ────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: resq-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: resq_admin
+      POSTGRES_PASSWORD: resq_hackathon_2026
+      POSTGRES_DB: resq_db
+    volumes:
+      - resq_pgdata:/var/lib/postgresql/data
+      - ./documentation/disaster_relief_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U resq_admin -d resq_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  resq_pgdata:
+    driver: local
