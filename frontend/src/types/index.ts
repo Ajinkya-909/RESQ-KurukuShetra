@@ -47,6 +47,11 @@ export interface Zone {
   confidence_score?: number;     // 0.0 to 1.0
   population_estimate?: number;
   status?: 'active' | 'stabilizing' | 'resolved' | string;
+  time_to_exhaustion?: {
+    water_hours: number;
+    food_hours: number;
+    critical_resource: string;
+  };
   needs?: ZoneNeed[];
   needs_summary?: {
     total_needed: number;
@@ -155,6 +160,7 @@ export interface DashboardData {
     total_allocations: number;
     pending_approvals: number;
     resources_in_transit: number;
+    corridor_efficiency_pct?: number;
   };
   kpis?: {
     total_zones?: number;
@@ -165,6 +171,7 @@ export interface DashboardData {
     total_allocations?: number;
     pending_approvals?: number;
     resources_in_transit?: number;
+    corridor_efficiency_pct?: number;
   };
   zones: Zone[];
   helping_points: HelpingPoint[];
@@ -180,8 +187,10 @@ export interface DashboardData {
   }>;
   supply_lines: Array<{
     allocation_id: number;
+    from_name?: string;
     from_lat: number;
     from_lng: number;
+    to_name?: string;
     to_lat: number;
     to_lng: number;
     resource_name: string;
@@ -195,6 +204,19 @@ export interface DashboardData {
     resource_name: string;
     quantity: number;
     reasoning?: string | null;
+  }>;
+  duplicate_flags?: Array<{
+    flag_id: number;
+    duplicate_score: number;
+    report_1?: { report_id: number; raw_text: string } | null;
+    report_2?: { report_id: number; raw_text: string } | null;
+  }>;
+  redundant_warnings?: Array<{
+    point_id: number;
+    point_name: string;
+    resource_name: string;
+    available_stock: number;
+    message: string;
   }>;
 }
 
