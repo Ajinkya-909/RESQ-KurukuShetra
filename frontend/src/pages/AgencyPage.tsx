@@ -19,6 +19,7 @@ import {
   HeartHandshake,
 } from 'lucide-react';
 import { TacticalMapWrapper } from '../components/Map';
+import { ConfirmationModal } from '../components/ConfirmationModal';
 import { helpingPointsApi, allocationsApi, zonesApi, scenariosApi } from '../api';
 import { HelpingPoint, Allocation, Zone } from '../types';
 
@@ -49,6 +50,12 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
   const [loading, setLoading] = useState(true);
   const [activeScenarioId, setActiveScenarioId] = useState(scenarioId || 'scn_pune_monsoon');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{
+    type: 'dispatch' | 'deliver';
+    allocationId: number;
+    title: string;
+    message: string;
+  } | null>(null);
 
   const loadAgencyData = async () => {
     try {
@@ -141,6 +148,17 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
         type: 'error',
         text: `Confirm delivery failed: ${err.message}`,
       });
+    }
+  };
+
+  const executeConfirmedAction = () => {
+    if (!confirmAction) return;
+    const { type, allocationId } = confirmAction;
+    setConfirmAction(null);
+    if (type === 'dispatch') {
+      handleDispatch(allocationId);
+    } else {
+      handleDeliver(allocationId);
     }
   };
 
@@ -470,7 +488,12 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
                     <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                       {alloc.status === 'confirmed' && (
                         <button
-                          onClick={() => handleDispatch(alloc.allocation_id)}
+                          onClick={() => setConfirmAction({
+                            type: 'dispatch',
+                            allocationId: alloc.allocation_id,
+                            title: `Dispatch Convoy #${alloc.allocation_id}?`,
+                            message: `Confirm dispatching convoy with ${alloc.quantity} ${alloc.resource_name || 'Emergency Aid'}?`,
+                          })}
                           className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-extrabold shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                         >
                           <Send className="w-3.5 h-3.5" />
@@ -480,7 +503,12 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
 
                       {(alloc.status === 'dispatched' || alloc.status === 'en_route') && (
                         <button
-                          onClick={() => handleDeliver(alloc.allocation_id)}
+                          onClick={() => setConfirmAction({
+                            type: 'deliver',
+                            allocationId: alloc.allocation_id,
+                            title: `Confirm Delivery #${alloc.allocation_id}?`,
+                            message: `Confirm that shipment #${alloc.allocation_id} has arrived and fulfilled triage requirements?`,
+                          })}
                           className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" />
@@ -502,6 +530,18 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
           )}
         </div>
       </div>
+
+      {/* Confirmation Dialog for Dispatch / Delivery Actions */}
+      <ConfirmationModal
+        isOpen={Boolean(confirmAction)}
+        title={confirmAction?.title || ''}
+        message={confirmAction?.message || ''}
+        confirmLabel={confirmAction?.type === 'dispatch' ? 'Dispatch Convoy' : 'Confirm Delivery'}
+        cancelLabel="Cancel"
+        variant={confirmAction?.type === 'dispatch' ? 'info' : 'success'}
+        onConfirm={executeConfirmedAction}
+        onCancel={() => setConfirmAction(null)}
+      />
     </div>
   );
 };

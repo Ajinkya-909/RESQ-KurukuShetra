@@ -16,6 +16,7 @@ import {
   MapPin,
   Flame,
 } from 'lucide-react';
+import { ConfirmationModal } from '../components/ConfirmationModal';
 import { scenariosApi } from '../api';
 import { Scenario } from '../types';
 
@@ -31,12 +32,11 @@ export const HomePage: React.FC<HomePageProps> = ({
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const fetchScenarios = async () => {
     try {
       setLoading(true);
-      setError(null);
       const data = await scenariosApi.list();
       setScenarios(data || []);
     } catch (err: any) {
@@ -90,14 +90,20 @@ export const HomePage: React.FC<HomePageProps> = ({
     }
   };
 
-  const handleDeleteScenario = async (e: React.MouseEvent, id: string) => {
+  const handleDeleteScenario = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!window.confirm(`Are you sure you want to remove scenario session "${id}"?`)) return;
+    setConfirmDeleteId(id);
+  };
+
+  const executeDeleteScenario = async () => {
+    if (!confirmDeleteId) return;
+    const targetId = confirmDeleteId;
+    setConfirmDeleteId(null);
     try {
-      await scenariosApi.delete(id);
-      setScenarios((prev) => prev.filter((s) => s.scenario_id !== id));
+      await scenariosApi.delete(targetId);
+      setScenarios((prev) => prev.filter((s) => s.scenario_id !== targetId));
     } catch (err: any) {
-      setScenarios((prev) => prev.filter((s) => s.scenario_id !== id));
+      setScenarios((prev) => prev.filter((s) => s.scenario_id !== targetId));
     }
   };
 
@@ -355,6 +361,18 @@ export const HomePage: React.FC<HomePageProps> = ({
           </p>
         </div>
       </section>
+
+      {/* Confirmation Dialog for Scenario Deletion */}
+      <ConfirmationModal
+        isOpen={Boolean(confirmDeleteId)}
+        title="Remove Scenario Session?"
+        message={`Are you sure you want to remove scenario session "${confirmDeleteId}"? This action cannot be undone.`}
+        confirmLabel="Remove Session"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={executeDeleteScenario}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
   );
 };
