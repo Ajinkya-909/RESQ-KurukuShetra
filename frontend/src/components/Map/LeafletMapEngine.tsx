@@ -8,6 +8,12 @@ import {
   getSeverityColor,
   AGENCY_COLORS,
 } from './mapStyles';
+import {
+  getDroppedPinLeafletIcon,
+  getHelpingPointLeafletIcon,
+  getSavedZoneCenterLeafletIcon,
+} from './markerIcons';
+
 
 export const LeafletMapEngine: React.FC<TacticalMapProps> = ({
   center = DEFAULT_MAP_CENTER,
@@ -111,112 +117,105 @@ export const LeafletMapEngine: React.FC<TacticalMapProps> = ({
 
       circle.on('click', () => onZoneClick?.(zone));
       zonesLayerRef.current.addLayer(circle);
+
+      // Center pill tag for zone
+      const centerLabel = L.marker([zone.center_lat, zone.center_lng], {
+        icon: getSavedZoneCenterLeafletIcon(zone),
+        bubblingMouseEvents: true,
+      });
+      centerLabel.on('click', () => onZoneClick?.(zone));
+      zonesLayerRef.current.addLayer(centerLabel);
     });
   }, [zones, activeLayers.zones]);
 
-  // 3. Render Temp Zone Preview (CRITICAL: interactive: false so clicks pass right through!)
+  // 3. Render Temp Zone Preview with Visual Dropped Pin & Real-time Radius Circle
   useEffect(() => {
     tempZoneLayerRef.current.clearLayers();
     if (!tempZone) return;
 
     const colors = getSeverityColor(tempZone.severity_level);
 
-    // A. Preview Circle (interactive: false prevents blocking subsequent map clicks)
+    // A. Dynamic Radius Preview Circle (interactive: false so clicks pass right through)
     const circle = L.circle([tempZone.center_lat, tempZone.center_lng], {
       radius: tempZone.radius_m,
       color: colors.stroke,
-      weight: 2.5,
-      dashArray: '6, 6',
+      weight: 3,
+      dashArray: '8, 8',
       fillColor: colors.stroke,
-      fillOpacity: 0.28,
+      fillOpacity: 0.22,
       interactive: false, // Prevents intercepting mouse clicks
     });
     tempZoneLayerRef.current.addLayer(circle);
 
-    // B. Prominent Center Pin Marker
-    const pinIcon = L.divIcon({
-      className: 'temp-zone-center-pin',
-      html: `
-        <div style="position: relative; width: 32px; height: 32px;">
-          <div style="
-            position: absolute;
-            inset: -4px;
-            background: ${colors.stroke};
-            border-radius: 50%;
-            opacity: 0.35;
-            animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
-          "></div>
-          <div style="
-            position: relative;
-            width: 28px;
-            height: 28px;
-            background: ${colors.stroke};
-            border: 3px solid #FFFFFF;
-            border-radius: 50%;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 14px;
-            font-weight: bold;
-          ">
-            📍
-          </div>
-        </div>
-      `,
-      iconSize: [32, 32],
-      iconAnchor: [16, 16],
-    });
-
+    // B. Dropped Pin Marker (Matching user's red teardrop icon with center hole & ground ripple)
     const centerMarker = L.marker([tempZone.center_lat, tempZone.center_lng], {
-      icon: pinIcon,
+      icon: getDroppedPinLeafletIcon(tempZone.severity_level),
       interactive: false,
     });
     tempZoneLayerRef.current.addLayer(centerMarker);
+
+    // C. Live Radius Measurement Badge (Hovering at the top perimeter of the circle)
+    // Approximate latitude offset for radius_m meters: 1 deg lat ~= 111,320m
+    const latOffset = tempZone.radius_m / 111320;
+    const radiusTagIcon = L.divIcon({
+      className: 'temp-zone-radius-tag',
+      html: `
+        <div style="
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 4px 10px;
+          background: #0F172A;
+          color: #FFFFFF;
+          font-family: 'Poppins', sans-serif;
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 0.02em;
+          border-radius: 9999px;
+          border: 1.5px solid ${colors.stroke};
+          box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+          white-space: nowrap;
+          pointer-events: none;
+        ">
+          <span style="width: 7px; height: 7px; border-radius: 50%; background: ${colors.stroke};"></span>
+          <span>Radius: ${(tempZone.radius_m / 1000).toFixed(1)} km</span>
+          <span style="color: #94A3B8; font-size: 9px; font-mono font-bold;">(${tempZone.radius_m}m)</span>
+        </div>
+      `,
+      iconSize: [160, 26],
+      iconAnchor: [80, 13],
+    });
+
+    const radiusTagMarker = L.marker([tempZone.center_lat + latOffset, tempZone.center_lng], {
+      icon: radiusTagIcon,
+      interactive: false,
+    });
+    tempZoneLayerRef.current.addLayer(radiusTagMarker);
   }, [tempZone]);
 
-  // 4. Render Helping Points (Depots)
+  // 4. Render Decisive Helping Points (Depots with High-Visibility Badges & Icons)
   useEffect(() => {
     depotsLayerRef.current.clearLayers();
     if (!activeLayers.depots) return;
 
     helpingPoints.forEach((point) => {
       const color = AGENCY_COLORS[point.type] || '#2563EB';
-      const icon = L.divIcon({
-        className: 'custom-depot-marker',
-        html: `
-          <div style="
-            width: 26px;
-            height: 26px;
-            background: ${color};
-            border: 2.5px solid #FFFFFF;
-            border-radius: 50%;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 12px;
-            font-weight: bold;
-          ">
-            🏢
-          </div>
-        `,
-        iconSize: [26, 26],
-        iconAnchor: [13, 13],
-      });
-
       const marker = L.marker([point.lat, point.lng], {
-        icon,
+        icon: getHelpingPointLeafletIcon(point),
         bubblingMouseEvents: true,
       });
 
       marker.bindPopup(`
-        <div class="p-2.5 text-slate-900 font-sans">
-          <p class="font-bold text-sm text-slate-900">${point.name}</p>
-          <p class="text-xs uppercase font-bold mt-1" style="color:${color}">${point.type} Hub</p>
-          <p class="text-xs text-slate-600 mt-0.5">Reliability: ${(point.reliability_score * 100).toFixed(0)}%</p>
+        <div class="p-3 text-slate-900 font-sans">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full" style="background:${color}"></span>
+            <p class="font-bold text-sm text-slate-900">${point.name}</p>
+          </div>
+          <div class="mt-2 space-y-1 text-xs">
+            <p class="text-slate-500">Agency: <span class="font-bold uppercase text-slate-800">${point.type}</span></p>
+            <p class="text-slate-500">Capacity: <span class="font-bold text-slate-800">${point.capacity_score * 100}%</span></p>
+            <p class="text-slate-500">Reliability: <span class="font-bold text-emerald-600">${(point.reliability_score * 100).toFixed(0)}%</span></p>
+          </div>
         </div>
       `);
 

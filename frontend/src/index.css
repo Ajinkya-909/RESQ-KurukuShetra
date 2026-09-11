@@ -59,6 +59,45 @@
   border: none !important;
 }
 
+/* Precision Pin Drop Animations (Visual feedback on map click) */
+@keyframes pinDrop {
+  0% {
+    transform: translateY(-60px) scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(6px) scale(1.08);
+    opacity: 1;
+  }
+  80% {
+    transform: translateY(-3px) scale(0.96);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes groundRipple {
+  0% {
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.4);
+    opacity: 0;
+  }
+}
+
+.pin-drop-anim {
+  animation: pinDrop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  transform-origin: 22px 54px;
+}
+
+.ground-ripple-anim {
+  animation: groundRipple 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
 /* Custom Leaflet popup styling matching clean modern light theme */
 .leaflet-popup-content-wrapper {
   background: #ffffff !important;
@@ -78,3 +117,4 @@
 .leaflet-popup-tip {
   background: #ffffff !important;
 }
+

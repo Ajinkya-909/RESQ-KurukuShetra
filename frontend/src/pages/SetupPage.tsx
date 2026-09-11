@@ -59,16 +59,12 @@ export const SetupPage: React.FC<SetupPageProps> = ({
   const [startingSim, setStartingSim] = useState(false);
   const [savingScenario, setSavingScenario] = useState(false);
 
-  const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>({
-    type: 'success',
-    text: 'Click anywhere on the map to drop a disaster zone pin with default 3.0 km radius.',
-  });
+  const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Zone Placement Form State
-  const [selectedCoords, setSelectedCoords] = useState<{ lat: number; lng: number } | null>({
-    lat: 18.5300,
-    lng: 73.8600, // Center of Pune corridor
-  });
+
+  // Zone Placement Form State (Null until operator clicks on map)
+  const [selectedCoords, setSelectedCoords] = useState<{ lat: number; lng: number } | null>(null);
+
   const [zoneName, setZoneName] = useState('Zone 1 (Sangamwadi Lowlands)');
   const [radiusMeters, setRadiusMeters] = useState(3000); // 3 km default
   const [severityLevel, setSeverityLevel] = useState<'critical' | 'high' | 'moderate' | 'low'>('critical');
@@ -198,14 +194,13 @@ export const SetupPage: React.FC<SetupPageProps> = ({
   // Handle Map Click: drops marker & previews radius
   const handleMapClick = (coords: { lat: number; lng: number }) => {
     setSelectedCoords(coords);
-    setFeedbackMsg({
-      type: 'success',
-      text: `📍 Pin dropped at [${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}]. Adjust radius and click "+ Save Zone" below.`,
-    });
+    setFeedbackMsg(null);
     if (!zoneName || zoneName.startsWith('Zone ')) {
       setZoneName(`Zone ${zones.length + 1}`);
     }
   };
+
+
 
   const handleDropAtCenter = () => {
     const centerPune = { lat: 18.5280, lng: 73.8650 };
@@ -275,7 +270,7 @@ export const SetupPage: React.FC<SetupPageProps> = ({
 
       if (serverZone?.zone_id) {
         setZones((prev) =>
-          prev.map((z) => (z.zone_id === newZoneData.zone_id ? serverZone : z))
+          prev.map((z) => (String(z.zone_id) === String(newZoneData.zone_id) ? serverZone : z))
         );
       }
     } catch (err: any) {
@@ -283,21 +278,26 @@ export const SetupPage: React.FC<SetupPageProps> = ({
     } finally {
       setSavingZone(false);
       setZoneName(`Zone ${zones.length + 2}`);
-      setSelectedCoords({
-        lat: selectedCoords.lat + 0.012,
-        lng: selectedCoords.lng + 0.012,
-      });
+      // Clear the temporary preview pin & radius circle so it doesn't linger on map!
+      setSelectedCoords(null);
     }
   };
 
-  const handleDeleteZone = async (zoneId: number) => {
-    setZones((prev) => prev.filter((z) => z.zone_id !== zoneId));
+  const handleDeleteZone = async (zoneId: number | string) => {
+    // 1. Immediately remove from local state so the circle is instantly deleted from map
+    setZones((prev) => prev.filter((z) => String(z.zone_id) !== String(zoneId)));
+
+    // 2. Also clear any active preview coordinate to ensure map is clean
+    setSelectedCoords(null);
+
+    // 3. Delete from backend database
     try {
-      await zonesApi.delete(scenarioId, zoneId);
+      await zonesApi.delete(scenarioId, Number(zoneId));
     } catch (err) {
       // Ignored for local entries
     }
   };
+
 
   const handleStartSimulation = async () => {
     if (zones.length === 0) {
@@ -415,10 +415,10 @@ export const SetupPage: React.FC<SetupPageProps> = ({
         </button>
       </div>
 
-      {/* 2. Main 100vh Work Area: 68% Light Map on Left, 32% Panel on Right */}
+      {/* 2. Main 100vh Work Area: Controlled Map on Left, Spacious De-Cluttered Form on Right */}
       <div className="flex-1 flex flex-row overflow-hidden relative">
-        {/* Left Side: Interactive Light Map (68% Width) */}
-        <div className="flex-1 relative h-full bg-[#f8fafc] border-r border-slate-200">
+        {/* Left Side: Interactive Light Map (~60% Width) */}
+        <div className="flex-1 min-w-0 relative h-full bg-[#f8fafc] border-r border-slate-200">
           <TacticalMapWrapper
             zones={zones}
             helpingPoints={helpingPoints}
@@ -426,192 +426,76 @@ export const SetupPage: React.FC<SetupPageProps> = ({
             onMapClick={handleMapClick}
             className="w-full h-full"
           />
-
-          {/* Interactive Help Card */}
-          <div className="absolute top-4 left-4 z-[1000] max-w-md px-4 py-3 rounded-2xl bg-white/95 border border-slate-200 text-slate-900 shadow-xl backdrop-blur-md flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
-                <MapPin className="w-5 h-5" />
-              </div>
-              <p className="text-xs font-semibold leading-snug text-slate-700">
-                <strong>Click anywhere on map</strong> to drop a pin. Preview circle radius:{' '}
-                <strong className="text-blue-600 font-bold">{(radiusMeters / 1000).toFixed(1)} km</strong>.
-              </p>
-            </div>
-            <button
-              onClick={handleDropAtCenter}
-              className="shrink-0 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-colors cursor-pointer"
-            >
-              Drop Pin
-            </button>
-          </div>
         </div>
 
-        {/* Right Side: Setup Panel (Scenario Details + Zone Form) (32% Width) */}
-        <div className="w-88 sm:w-96 md:w-[440px] bg-white h-full flex flex-col shrink-0 shadow-xl z-10 overflow-hidden">
-          {/* Panel Header */}
-          <div className="p-4 border-b border-slate-200 bg-slate-50/80 shrink-0">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
-                  <Compass className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-extrabold text-slate-900">Setup & Zone Engine</h3>
-                  <p className="text-xs text-slate-500 font-mono">Route: /setup/{scenarioId}</p>
-                </div>
-              </div>
-              <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">
-                100vh Mode
-              </span>
+
+        {/* Right Side: Clean, Focused Zone Setup Panel (~40% Width: 480px-560px) */}
+        <div className="w-full md:w-[480px] lg:w-[520px] xl:w-[560px] bg-white h-full flex flex-col shrink-0 shadow-2xl z-10 overflow-hidden border-l border-slate-200">
+          {/* Clean Panel Header */}
+          <div className="px-6 py-4.5 border-b border-slate-200 bg-white shrink-0 flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-black text-slate-900 tracking-tight">
+                Configure Disaster Zone
+              </h3>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Click map to reposition pin • Adjust radius & severity below
+              </p>
             </div>
+            <span className="text-xs font-bold font-mono px-3 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+              {zones.length} {zones.length === 1 ? 'Zone' : 'Zones'}
+            </span>
           </div>
 
           {/* Form Scroll Container */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-6">
-            {/* Feedback Alert */}
-            {feedbackMsg && (
-              <div
-                className={`p-3.5 rounded-xl border text-xs font-semibold flex items-start gap-2.5 ${
-                  feedbackMsg.type === 'error'
-                    ? 'bg-rose-50 border-rose-200 text-rose-800'
-                    : 'bg-blue-50 border-blue-200 text-blue-800'
-                }`}
-              >
-                {feedbackMsg.type === 'error' ? (
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
-                ) : (
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-blue-600 mt-0.5" />
-                )}
-                <span>{feedbackMsg.text}</span>
+          <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+            {/* Error Feedback Alert (Only shown if validation fails) */}
+            {feedbackMsg && feedbackMsg.type === 'error' && (
+              <div className="p-3.5 rounded-2xl border text-xs font-semibold flex items-start gap-3 bg-rose-50 border-rose-200 text-rose-800 transition-all">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                <span className="leading-relaxed">{feedbackMsg.text}</span>
               </div>
             )}
 
-            {/* A. SCENARIO CONFIGURATION SECTION (Directly inside setup engine) */}
-            <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200/80 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
-                  <Shield className="w-3.5 h-3.5 text-blue-600" />
-                  Scenario Configuration
-                </span>
-                <button
-                  type="button"
-                  onClick={handleSaveScenarioDetails}
-                  disabled={savingScenario}
-                  className="flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-900 hover:underline cursor-pointer"
-                >
-                  <Save className="w-3 h-3" />
-                  <span>{savingScenario ? 'Saving...' : 'Sync Name'}</span>
-                </button>
-              </div>
+            {/* ZONE CONFIGURATION FORM (Starts immediately, zero clutter) */}
+            <form onSubmit={handleSaveZone} className="space-y-6">
 
-              {/* Scenario Name Field */}
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700">Scenario Title</label>
-                <input
-                  type="text"
-                  value={scenarioName}
-                  onChange={(e) => setScenarioName(e.target.value)}
-                  onBlur={handleSaveScenarioDetails}
-                  placeholder="Scenario Name..."
-                  className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 focus:border-blue-600 text-sm font-extrabold text-slate-900 outline-none"
-                />
-              </div>
 
-              {/* Disaster Classification Selector */}
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700">Disaster Type</label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDisasterType('flood');
-                      handleSaveScenarioDetails(scenarioName, 'flood');
-                    }}
-                    className={`flex items-center justify-center gap-1 py-1.5 rounded-lg border text-xs font-bold transition-all ${
-                      disasterType === 'flood'
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <Waves className="w-3.5 h-3.5" />
-                    <span>Flood</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDisasterType('cyclone');
-                      handleSaveScenarioDetails(scenarioName, 'cyclone');
-                    }}
-                    className={`flex items-center justify-center gap-1 py-1.5 rounded-lg border text-xs font-bold transition-all ${
-                      disasterType === 'cyclone'
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <Wind className="w-3.5 h-3.5" />
-                    <span>Cyclone</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDisasterType('earthquake');
-                      handleSaveScenarioDetails(scenarioName, 'earthquake');
-                    }}
-                    className={`flex items-center justify-center gap-1 py-1.5 rounded-lg border text-xs font-bold transition-all ${
-                      disasterType === 'earthquake'
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <Mountain className="w-3.5 h-3.5" />
-                    <span>Quake</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* B. ZONE PLACEMENT FORM */}
-            <form onSubmit={handleSaveZone} className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                  Drop & Configure Zone
-                </span>
-                <span className="text-[11px] font-mono text-slate-500 font-bold">
-                  {selectedCoords
-                    ? `${selectedCoords.lat.toFixed(4)}, ${selectedCoords.lng.toFixed(4)}`
-                    : 'Click map'}
-                </span>
-              </div>
-
-              {/* Zone Name */}
+              {/* Zone Name Input */}
               <div className="space-y-1.5">
-                <label className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
-                  Zone Name <span className="text-rose-500">*</span>
+                <label className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center justify-between">
+                  <span>Zone Name</span>
+                  <span className="text-[11px] text-slate-400 font-normal">Identifies target sector</span>
                 </label>
                 <input
                   type="text"
                   required
                   value={zoneName}
                   onChange={(e) => setZoneName(e.target.value)}
-                  placeholder="e.g. Zone 1 (Sangamwadi)"
+                  placeholder="e.g. Zone 1 (Sangamwadi Lowlands)"
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 text-sm font-bold text-slate-900 placeholder:text-slate-400 outline-none transition-all shadow-xs"
                 />
               </div>
 
-              {/* Radius Perimeter Slider (Default 3 km) */}
-              <div className="space-y-2 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+              {/* Coverage Radius Slider & Live Controls (Spacious with Preset Buttons) */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
-                    Zone Radius Perimeter
-                  </label>
-                  <span className="text-sm font-mono font-extrabold text-blue-600 bg-blue-100 px-2.5 py-0.5 rounded-md">
-                    {(radiusMeters / 1000).toFixed(1)} km ({radiusMeters} m)
-                  </span>
+                  <div>
+                    <label className="text-xs font-extrabold text-slate-800 uppercase tracking-wider block">
+                      Zone Radius Perimeter
+                    </label>
+                    <span className="text-[11px] text-slate-500">Live preview adjusts on map</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-blue-600 text-white px-3 py-1 rounded-xl shadow-xs">
+                    <span className="text-sm font-mono font-black">
+                      {(radiusMeters / 1000).toFixed(1)} km
+                    </span>
+                    <span className="text-[10px] opacity-80 font-mono font-medium">
+                      ({radiusMeters}m)
+                    </span>
+                  </div>
                 </div>
+
+                {/* Range Slider */}
                 <input
                   type="range"
                   min="500"
@@ -619,127 +503,181 @@ export const SetupPage: React.FC<SetupPageProps> = ({
                   step="250"
                   value={radiusMeters}
                   onChange={(e) => setRadiusMeters(Number(e.target.value))}
-                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                 />
-                <div className="flex justify-between text-xs text-slate-500 font-mono font-medium">
-                  <span>0.5 km</span>
-                  <span className="font-bold text-slate-700">Default 3.0 km</span>
-                  <span>10.0 km</span>
+
+                {/* Quick Radius Preset Pills */}
+                <div className="flex items-center justify-between gap-1.5 pt-1">
+                  {[
+                    { label: '1.5 km', val: 1500 },
+                    { label: '3.0 km', val: 3000 },
+                    { label: '5.0 km', val: 5000 },
+                    { label: '7.5 km', val: 7500 },
+                    { label: '10 km', val: 10000 },
+                  ].map((preset) => (
+                    <button
+                      key={preset.val}
+                      type="button"
+                      onClick={() => setRadiusMeters(preset.val)}
+                      className={`flex-1 py-1 rounded-lg text-[11px] font-extrabold transition-all cursor-pointer ${
+                        radiusMeters === preset.val
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              {/* Severity Classification */}
+              {/* Severity Level (2x2 Clean Grid) */}
               <div className="space-y-2">
-                <label className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
-                  Severity Classification
+                <label className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center justify-between">
+                  <span>Severity Classification</span>
+                  <span className="text-[11px] text-slate-400 font-normal">Impact score weighting</span>
                 </label>
                 <div className="grid grid-cols-2 gap-2.5">
                   <button
                     type="button"
                     onClick={() => setSeverityLevel('critical')}
-                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-extrabold transition-all cursor-pointer ${
+                    className={`flex items-center justify-between p-3 rounded-xl border text-xs font-extrabold transition-all cursor-pointer ${
                       severityLevel === 'critical'
-                        ? 'bg-rose-50 border-rose-500 text-rose-700 ring-2 ring-rose-200 shadow-xs'
+                        ? 'bg-rose-50 border-rose-500 text-rose-700 ring-2 ring-rose-200 shadow-sm'
                         : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span>Critical</span>
-                    <span className="w-3 h-3 rounded-full bg-rose-600" />
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full bg-rose-600 shrink-0" />
+                      <span>Critical</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-rose-600 font-bold">92%</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setSeverityLevel('high')}
-                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-extrabold transition-all cursor-pointer ${
+                    className={`flex items-center justify-between p-3 rounded-xl border text-xs font-extrabold transition-all cursor-pointer ${
                       severityLevel === 'high'
-                        ? 'bg-orange-50 border-orange-500 text-orange-700 ring-2 ring-orange-200 shadow-xs'
+                        ? 'bg-orange-50 border-orange-500 text-orange-700 ring-2 ring-orange-200 shadow-sm'
                         : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span>High</span>
-                    <span className="w-3 h-3 rounded-full bg-orange-500" />
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full bg-orange-500 shrink-0" />
+                      <span>High</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-orange-600 font-bold">75%</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setSeverityLevel('moderate')}
-                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-extrabold transition-all cursor-pointer ${
+                    className={`flex items-center justify-between p-3 rounded-xl border text-xs font-extrabold transition-all cursor-pointer ${
                       severityLevel === 'moderate'
-                        ? 'bg-amber-50 border-amber-500 text-amber-700 ring-2 ring-amber-200 shadow-xs'
+                        ? 'bg-amber-50 border-amber-500 text-amber-700 ring-2 ring-amber-200 shadow-sm'
                         : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span>Moderate</span>
-                    <span className="w-3 h-3 rounded-full bg-amber-500" />
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full bg-amber-500 shrink-0" />
+                      <span>Moderate</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-amber-600 font-bold">50%</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setSeverityLevel('low')}
-                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-extrabold transition-all cursor-pointer ${
+                    className={`flex items-center justify-between p-3 rounded-xl border text-xs font-extrabold transition-all cursor-pointer ${
                       severityLevel === 'low'
-                        ? 'bg-emerald-50 border-emerald-500 text-emerald-700 ring-2 ring-emerald-200 shadow-xs'
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-700 ring-2 ring-emerald-200 shadow-sm'
                         : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span>Low</span>
-                    <span className="w-3 h-3 rounded-full bg-emerald-600" />
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full bg-emerald-600 shrink-0" />
+                      <span>Low</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-emerald-600 font-bold">25%</span>
                   </button>
                 </div>
               </div>
 
               {/* Estimated Population */}
               <div className="space-y-1.5">
-                <label className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
-                  Estimated Affected Population
+                <label className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center justify-between">
+                  <span>Estimated Population</span>
+                  <span className="text-[11px] text-slate-400 font-normal">Persons in sector</span>
                 </label>
-                <div className="relative">
-                  <Users className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                  <input
-                    type="number"
-                    min="0"
-                    step="50"
-                    value={population}
-                    onChange={(e) => setPopulation(Number(e.target.value))}
-                    placeholder="e.g. 4500"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 text-sm font-bold text-slate-900 outline-none transition-all shadow-xs"
-                  />
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Users className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                    <input
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={population}
+                      onChange={(e) => setPopulation(Number(e.target.value))}
+                      placeholder="e.g. 4500"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 text-sm font-bold text-slate-900 outline-none transition-all shadow-xs"
+                    />
+                  </div>
+                  {/* Quick Population Presets */}
+                  <div className="flex gap-1">
+                    {[2500, 5000, 10000].map((pop) => (
+                      <button
+                        key={pop}
+                        type="button"
+                        onClick={() => setPopulation(pop)}
+                        className={`px-2.5 py-2 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer ${
+                          population === pop
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {pop / 1000}k
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              {/* Add Zone Action Button */}
+              {/* Save Zone Action Button (Large, Unmissable) */}
               <button
                 type="submit"
                 disabled={savingZone}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-extrabold shadow-md shadow-blue-500/25 transition-all disabled:opacity-50 cursor-pointer"
+                className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-black shadow-lg shadow-blue-500/25 transition-all disabled:opacity-50 cursor-pointer"
               >
-                <Plus className="w-4 h-4" />
-                <span>{savingZone ? 'Saving Zone...' : '+ Save Zone to Scenario'}</span>
+                <Plus className="w-5 h-5" />
+                <span>{savingZone ? 'Saving Zone to Scenario...' : '+ SAVE ZONE TO SCENARIO'}</span>
               </button>
             </form>
 
             {/* C. LIST OF CONFIGURED ZONES */}
             <div className="pt-4 border-t border-slate-200 space-y-3">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800">
-                  Padded Impact Zones ({zones.length})
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
+                  Configured Impact Zones ({zones.length})
                 </h4>
-                <span className="text-[11px] font-mono font-bold text-blue-600">
-                  {zones.reduce((sum, z) => sum + (z.population_estimate || 0), 0).toLocaleString()} people
+                <span className="text-xs font-mono font-bold text-blue-600">
+                  {zones.reduce((sum, z) => sum + (z.population_estimate || 0), 0).toLocaleString()} people affected
                 </span>
               </div>
 
               {zones.length === 0 ? (
-                <div className="p-4 text-center rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-xs font-medium space-y-1">
-                  <p className="font-bold">No zones padded yet</p>
-                  <p>Click on the map to place your first disaster zone perimeter.</p>
+                <div className="p-5 text-center rounded-2xl bg-slate-50 border border-slate-200 text-slate-500 text-xs font-medium space-y-1.5">
+                  <p className="font-bold text-slate-700 text-sm">No impact zones configured yet</p>
+                  <p className="text-slate-500">
+                    Click anywhere on the map to drop the red pin, adjust your radius, and add your first sector.
+                  </p>
                 </div>
               ) : (
-                <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
                   {zones.map((zone, idx) => (
                     <div
                       key={zone.zone_id || idx}
-                      className="p-3 rounded-xl bg-slate-50 hover:bg-blue-50/50 border border-slate-200 flex items-center justify-between transition-all"
+                      className="p-3.5 rounded-xl bg-slate-50 hover:bg-blue-50/40 border border-slate-200 flex items-center justify-between transition-all"
                     >
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
@@ -759,7 +697,7 @@ export const SetupPage: React.FC<SetupPageProps> = ({
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 font-mono">
-                          Perimeter: {(zone.radius_m / 1000).toFixed(1)} km • Pop:{' '}
+                          Radius: {(zone.radius_m / 1000).toFixed(1)} km • Pop:{' '}
                           {zone.population_estimate?.toLocaleString() || 0}
                         </p>
                       </div>
