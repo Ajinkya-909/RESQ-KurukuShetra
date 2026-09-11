@@ -9,10 +9,18 @@ import {
   AGENCY_COLORS,
 } from './mapStyles';
 
+import { fetchRoadRoute, LatLng } from './routeService';
+
 const mapContainerStyle = {
   width: '100%',
   height: '100%',
 };
+
+interface ResolvedSupplyLine {
+  allocation_id: number;
+  status: string;
+  path: LatLng[];
+}
 
 export const GoogleMapEngine: React.FC<TacticalMapProps> = ({
   center = DEFAULT_MAP_CENTER,
@@ -41,6 +49,73 @@ export const GoogleMapEngine: React.FC<TacticalMapProps> = ({
   const tempCircleRef = useRef<any>(null);
   const tempMarkerRef = useRef<any>(null);
   const savedZonesRef = useRef<Map<string, any>>(new Map());
+
+  // Resolved Real-World Road Routes
+  const [resolvedRoutes, setResolvedRoutes] = useState<ResolvedSupplyLine[]>([]);
+
+  useEffect(() => {
+    if (!activeLayers.supplyLines || supplyLines.length === 0) {
+      setResolvedRoutes([]);
+      return;
+    }
+
+    let isMounted = true;
+
+    // Collect all active hazard locations (disaster zones and SOS reports)
+    const activeHazards = [
+      ...zones.map((z) => ({ lat: z.center_lat, lng: z.center_lng })),
+      ...reports.map((r) => ({ lat: r.lat, lng: r.lng })),
+    ];
+
+    const resolveAll = async () => {
+      const routes = await Promise.all(
+        supplyLines.map(async (line) => {
+          const waypoints = await fetchRoadRoute(
+            line.from_lat,
+            line.from_lng,
+            line.to_lat,
+            line.to_lng,
+            activeHazards
+          );
+          return {
+            allocation_id: line.allocation_id,
+            status: line.status,
+            path: waypoints,
+          };
+        })
+      );
+
+      if (isMounted) {
+        setResolvedRoutes(routes);
+      }
+    };
+
+    resolveAll();
+    return () => {
+      isMounted = false;
+    };
+  }, [supplyLines, activeLayers.supplyLines, zones, reports]);
+
+  // Animation Loop for Moving Dotted Supply Lines
+  const [lineAnimOffset, setLineAnimOffset] = useState(0);
+
+  useEffect(() => {
+    if (!activeLayers.supplyLines || supplyLines.length === 0) return;
+
+    let animId: number;
+    let lastStamp = performance.now();
+
+    const loop = (now: number) => {
+      if (now - lastStamp > 40) {
+        setLineAnimOffset((prev) => (prev + 1) % 20);
+        lastStamp = now;
+      }
+      animId = requestAnimationFrame(loop);
+    };
+
+    animId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animId);
+  }, [activeLayers.supplyLines, supplyLines.length]);
 
   const onLoad = useCallback((map: any) => {
     mapRef.current = map;
@@ -283,23 +358,49 @@ export const GoogleMapEngine: React.FC<TacticalMapProps> = ({
             />
           ))}
 
-        {/* 5. Supply Lines (Vectors) */}
+        {/* 5. Supply Lines (Animated Moving Dotted Road Vectors from Depot Source to Zone) */}
         {activeLayers.supplyLines &&
-          supplyLines.map((line, idx) => (
-            <Polyline
-              key={`line-${line.allocation_id || idx}`}
-              path={[
-                { lat: line.from_lat, lng: line.from_lng },
-                { lat: line.to_lat, lng: line.to_lng },
-              ]}
-              options={{
-                strokeColor: line.status === 'en_route' ? '#0284C7' : '#059669',
-                strokeOpacity: 0.85,
-                strokeWeight: 3,
-                geodesic: true,
-              }}
-            />
-          ))}
+          resolvedRoutes.map((line, idx) => {
+            const isEnRoute = line.status === 'en_route';
+            const color = isEnRoute ? '#0284C7' : '#10B981';
+
+            return (
+              <React.Fragment key={`supply-road-${line.allocation_id || idx}`}>
+                {/* Background Translucent Road Track */}
+                <Polyline
+                  path={line.path}
+                  options={{
+                    strokeColor: color,
+                    strokeOpacity: 0.3,
+                    strokeWeight: 3.5,
+                    geodesic: true,
+                  }}
+                />
+
+                {/* Animated Moving Dotted Stream along Real-World Road */}
+                <Polyline
+                  path={line.path}
+                  options={{
+                    strokeOpacity: 0,
+                    geodesic: true,
+                    icons: [
+                      {
+                        icon: {
+                          path: 'M 0,-1 0,1',
+                          strokeOpacity: 1,
+                          strokeColor: color,
+                          strokeWeight: 4,
+                          scale: 3,
+                        },
+                        offset: `${lineAnimOffset * 1}px`,
+                        repeat: '18px',
+                      },
+                    ],
+                  }}
+                />
+              </React.Fragment>
+            );
+          })}
 
         {/* Info Window */}
         {activeInfoWindow && (

@@ -46,7 +46,7 @@ export const TacticalMapWrapper: React.FC<TacticalMapProps> = (props) => {
       )}
 
       {/* Engine Status & Layer Controls Overlay (Top Right) - Clean Light Style */}
-      <div className="absolute top-4 right-4 z-[1000] flex flex-col items-end gap-2">
+      <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2">
         {/* Engine Badge */}
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/95 border border-slate-200 text-xs font-semibold text-slate-700 shadow-md backdrop-blur-md">
           <span
@@ -70,7 +70,7 @@ export const TacticalMapWrapper: React.FC<TacticalMapProps> = (props) => {
 
           {/* Layers Dropdown Menu */}
           {showLayerMenu && (
-            <div className="absolute right-0 mt-2 w-52 rounded-2xl bg-white border border-slate-200 p-3 shadow-2xl text-xs space-y-1 z-50">
+            <div className="absolute right-0 mt-2 w-52 rounded-2xl bg-white border border-slate-200 p-3 shadow-2xl text-xs space-y-1 z-30">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 px-2 py-1">
                 Visible Layers
               </p>

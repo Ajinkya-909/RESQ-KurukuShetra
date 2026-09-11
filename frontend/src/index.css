@@ -118,3 +118,22 @@
   background: #ffffff !important;
 }
 
+/* Animated Dotted Supply Line Flow (Moving from Depot Source to Zone Destination) */
+@keyframes flowSupplyDash {
+  from {
+    stroke-dashoffset: 40;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animated-supply-line-flow {
+  animation: flowSupplyDash 1.2s linear infinite;
+}
+
+.animated-supply-line-enroute {
+  animation: flowSupplyDash 0.75s linear infinite;
+}
+
+
