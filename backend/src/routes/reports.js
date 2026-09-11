@@ -84,22 +84,14 @@ router.post('/', async (req, res, next) => {
 
     const report = await prisma.report.create({
       data: {
-       
         scenario_id: scenarioId,
-       
         zone_id,
-       
         lat: parseFloat(lat),
-       
         lng: parseFloat(lng),
-       
         raw_text,
-       
         source,
         verification_status: 'unverified',
-     ,
         extracted_json: Object.keys(initialExtracted).length > 0 ? initialExtracted : undefined,
-        verification_status: 'unverified',
       },
     });
 
@@ -122,12 +114,10 @@ router.post('/', async (req, res, next) => {
       ...report,
       needed_resources,
       image_url: image_url || report.extracted_json?.image_url,
-      image_data: image_data || report.extracted_json?.image_data
+      image_data: image_data || report.extracted_json?.image_data,
     };
-    // Attach needed_resources for ML & direct allocation processing
-    const reportWithNeeds = { ...report, needed_resources };
 
-    // Async verification, duplicate detection & direct allocation pipeline
+    // Async verification, duplicate detection, YOLO vision analysis & direct allocation pipeline
     processReportAsync(reportWithNeeds, scenarioId).catch((err) =>
       console.error(`❌ [Report] Async pipeline failed for ${report.report_id}:`, err.message)
     );
@@ -367,18 +357,42 @@ const processReportAsync = async (report, scenarioId) => {
     }
   }
 
-  // 7. Update Report Record with ML verification and extracted metadata
+  // 7. Visual Intelligence (YOLO Object Detection) for photo attachments
+  const currentExtracted = report.extracted_json && typeof report.extracted_json === 'object' ? report.extracted_json : {};
+  const mlExtracted = mlResult.report_update?.extracted_json && typeof mlResult.report_update.extracted_json === 'object' ? mlResult.report_update.extracted_json : {};
+
+  const imageInput = report.image_url || report.image_data || currentExtracted.image_url || currentExtracted.image_data;
+  let visualEvidence = currentExtracted.visual_evidence || null;
+
+  if (!visualEvidence && imageInput) {
+    try {
+      visualEvidence = await mlClient.analyzeVision(imageInput);
+      console.log(`📷 [Report Pipeline] YOLO Visual Analysis completed for #${report.report_id}: ${visualEvidence?.detections?.length || 0} detections found.`);
+    } catch (vErr) {
+      console.warn(`⚠️ [Report Pipeline] YOLO Vision analysis failed for #${report.report_id}:`, vErr.message);
+    }
+  }
+
+  const mergedExtracted = {
+    ...currentExtracted,
+    ...mlExtracted,
+    ...(report.image_url ? { image_url: report.image_url } : {}),
+    ...(report.image_data ? { image_data: report.image_data } : {}),
+    ...(visualEvidence ? { visual_evidence: visualEvidence } : {}),
+  };
+
+  // Update Report Record with ML verification and extracted metadata
   const verifiedSeverity = mlResult.report_update?.severity_signal || 0.80;
   await prisma.report.update({
     where: { report_id: report.report_id },
     data: {
-      extracted_json: mlResult.report_update?.extracted_json || {},
+      extracted_json: mergedExtracted,
       severity_signal: verifiedSeverity,
       verification_status: 'verified',
     },
   });
 
-  // 8. Log Verification & Direct Triage Audit Entries
+  // 8. Log Verification, Visual Intelligence & Direct Triage Audit Entries
   await prisma.auditLog.create({
     data: {
       scenario_id: scenarioId,
@@ -389,6 +403,23 @@ const processReportAsync = async (report, scenarioId) => {
       reasoning_text: `SOS Report #${report.report_id} verified. No duplicate collision found within 600m. Severity scored at ${(verifiedSeverity * 10).toFixed(1)}/10. Direct triage initiated.`,
     },
   });
+
+  if (visualEvidence && visualEvidence.success && (visualEvidence.detections || []).length > 0) {
+    const topDetections = visualEvidence.detections
+      .slice(0, 4)
+      .map((d) => `${d.class_name} (${Math.round(d.confidence * 100)}%)`)
+      .join(', ');
+    await prisma.auditLog.create({
+      data: {
+        scenario_id: scenarioId,
+        event_type: 'visual_intelligence_detected',
+        agent_name: 'VisualIntelligenceAgent',
+        zone_id: report.zone_id,
+        report_id: report.report_id,
+        reasoning_text: `YOLO Computer Vision analyzed field photo for Report #${report.report_id}: Detected ${visualEvidence.detections.length} objects — [${topDetections}].`,
+      },
+    });
+  }
 
   if (allProposed.length > 0) {
     await prisma.allocation.createMany({ data: allProposed });
@@ -409,7 +440,7 @@ const processReportAsync = async (report, scenarioId) => {
   // 9. Real-Time Broadcasts to Command Center
   broadcastToScenario(scenarioId, 'report.processed', {
     report_id: report.report_id,
-    extracted_json: mlResult.report_update?.extracted_json,
+    extracted_json: mergedExtracted,
     severity_signal: verifiedSeverity,
     verification_status: 'verified',
     proposed_allocations_count: allProposed.length,

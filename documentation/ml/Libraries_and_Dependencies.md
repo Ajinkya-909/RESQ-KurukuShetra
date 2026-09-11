@@ -169,6 +169,32 @@ ortools
 
 ---
 
+### 2.11 Ultralytics YOLO (`ultralytics`)
+- **Category**: Deep Learning Computer Vision & Real-Time Object Detection
+- **Key Modules Imported**:
+  ```python
+  from ultralytics import YOLO
+  ```
+- **Role in RESQ**: Powers the Visual Intelligence detector (`ml/vision/detector.py`, `/vision/analyze`). Performs object detection for stranded persons, boats, flooded vehicles, and disaster hazards from field imagery.
+- **Why Chosen**: State-of-the-art accuracy, real-time edge and CPU inference speeds ($< 50\text{ms}$), out-of-the-box support for PyTorch weights (`yolov8n.pt`, `yolov11n.pt`).
+
+---
+
+### 2.12 OpenCV (`opencv-python` / `cv2`) & Pillow (`Pillow`)
+- **Category**: Image Manipulation & Computer Vision Preprocessing
+- **Key Modules Imported**:
+  ```python
+  import cv2
+  from PIL import Image
+  ```
+- **Role in RESQ**:
+  - Image decoding from Base64 data URIs, raw bytes, and file streams into BGR tensor arrays.
+  - High-visibility bounding box annotations, badge pills, and text rendering.
+  - Re-encoding annotated image buffers into Base64 JPEG payloads for client dashboards.
+- **Why Chosen**: Fast C++ computer vision operations and seamless integration with NumPy arrays.
+
+---
+
 ## 3. Environment Setup & Installation
 
 ### 3.1 Local Virtual Environment Setup

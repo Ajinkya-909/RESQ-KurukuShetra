@@ -270,3 +270,24 @@ Extracted entities are converted directly into acute resource demands:
 - $\text{Rescue Teams} = \max(1.0, 0.01 \times \text{stranded\_count})$
 - $\text{Medical Units} = 20 \text{ (if urgency is high)}$
 - $\text{Ambulances} = 2 \text{ (if urgency is high)}$
+
+---
+
+## 8. Visual Intelligence & YOLO Computer Vision Detector
+
+The visual intelligence module (`ml/vision/detector.py`) executes real-time convolutional / vision-transformer object detection on field distress imagery.
+
+### 8.1 Model Architecture & Weights
+- **Model**: Pretrained YOLOv8 / YOLOv11 nano backbone (`yolov8n.pt`).
+- **Input Resolution**: $640 \times 640$ normalized RGB tensor with auto-letterboxing.
+- **Inference Latency**: $\approx 15 - 45\text{ms}$ on CPU.
+
+### 8.2 Detection Classes & Key Targets
+- `person`: Trapped victims, stranded civilians on rooftops.
+- `boat`: Emergency rescue rafts, stranded watercraft.
+- `car` / `truck` / `bus`: Submerged transit vehicles, blocked road convoys.
+- `fire` / `smoke` / `rubble`: Hazard signatures.
+
+### 8.3 Bounding Box & Annotation Pipeline
+Bounding coordinates $[x_1, y_1, x_2, y_2]$ are extracted with confidence scores $c \ge \tau$ (default $\tau = 0.40$). OpenCV applies multi-colored high-visibility overlays, badge pills, and re-encodes annotated imagery to base64 JPEG format for instant dashboard visualization.
+

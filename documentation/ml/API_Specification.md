@@ -28,6 +28,7 @@ The RESQ ML Service is an asynchronous, high-throughput microservice responsible
 | `GET` | `/ml/health` | ML service health alias | Node.js `mlClient.checkHealth()` |
 | `POST` | `/predict/severity` | Direct 12-feature XGBoost severity inference | Internal testing / Analytics |
 | `POST` | `/intelligence/analyze` | End-to-end single zone intelligence pipeline | Evaluation & Benchmarks |
+| `POST` | `/vision/analyze` | YOLO object detection on field distress imagery | Node.js `mlClient.analyzeVision()` |
 | `POST` | `/ml/process-report` | Triage incoming SOS report & trigger global reallocation | Node.js `mlClient.processReport()` |
 | `POST` | `/ml/initial-allocation` | Compute initial allocation plan at simulation startup | Node.js `mlClient.initialAllocation()` |
 | `POST` | `/ml/tick` | Re-evaluate zone states on simulation time advance | Node.js `mlClient.tick()` |
@@ -233,7 +234,61 @@ Executes the complete unified single-zone intelligence pipeline: Feature Enginee
 
 ---
 
-### 3.4 `POST /ml/process-report`
+### 3.4 `POST /vision/analyze`
+
+Analyzes an SOS field photo or aerial imagery using **YOLO Object Detection** (Ultralytics YOLOv8 / YOLOv11) and OpenCV. Extracts structured visual evidence (bounding boxes, class labels, confidence scores) and generates annotated bounding box overlays without perturbing severity scores or allocation matrices.
+
+#### Request Schema (`VisionAnalyzeRequest`)
+```json
+{
+  "image_input": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ...",
+  "confidence_threshold": 0.35
+}
+```
+
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `image_input` | `string` | **Yes** | Image source: base64 data URI (`data:image/...;base64,...`), raw base64 string, or absolute/relative server file path |
+| `confidence_threshold` | `float` | No | Minimum detection confidence threshold in $[0.0, 1.0]$ (Default: `0.40`) |
+
+#### Response `200 OK`
+```json
+{
+  "success": true,
+  "model": "YOLO (yolov8n.pt)",
+  "detections": [
+    {
+      "class_name": "person",
+      "confidence": 0.8921,
+      "bbox": {
+        "x1": 120,
+        "y1": 180,
+        "x2": 210,
+        "y2": 390
+      }
+    },
+    {
+      "class_name": "boat",
+      "confidence": 0.8450,
+      "bbox": {
+        "x1": 340,
+        "y1": 220,
+        "x2": 580,
+        "y2": 410
+      }
+    }
+  ],
+  "image_width": 640,
+  "image_height": 480,
+  "annotated_image": "data:image/jpeg;base64,/9j/4AAQSkZJRg...",
+  "analyzed_at": "2026-09-12T05:15:00.000Z",
+  "inference_time_ms": 42.15
+}
+```
+
+---
+
+### 3.5 `POST /ml/process-report`
 
 Processes an incoming SOS emergency field report, runs NLP entity extraction, predicts report severity, applies emergency multipliers, and executes global reallocation across all scenario zones and helping points.
 
