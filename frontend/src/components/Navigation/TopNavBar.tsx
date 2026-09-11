@@ -19,18 +19,25 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
 
   return (
     <header className="h-18 bg-white border-b border-slate-200 px-8 py-3 flex items-center justify-between shrink-0 shadow-xs z-30 font-sans">
-      {/* Left: Brand Identity - Just RESQ */}
+      {/* Left: Brand Identity with Official Logo */}
       <div className="flex items-center gap-10 shrink-0">
         <div
           onClick={() => onNavigate('/')}
           className="flex items-center gap-3 cursor-pointer group select-none"
         >
-          <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:bg-blue-700 transition-colors">
-            <Shield className="w-5 h-5 text-white" />
+          <img
+            src="/logo.png"
+            alt="RESQ Logo"
+            className="w-10 h-10 object-contain drop-shadow-sm group-hover:scale-105 transition-transform"
+          />
+          <div className="flex flex-col">
+            <span className="font-black text-2xl tracking-tight text-slate-900 group-hover:text-blue-600 transition-colors leading-none">
+              RESQ
+            </span>
+            <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase mt-0.5">
+              Emergency Response
+            </span>
           </div>
-          <span className="font-black text-2xl tracking-tight text-slate-900 group-hover:text-blue-600 transition-colors">
-            RESQ
-          </span>
         </div>
 
         {/* Center: Navigation Tabs (Clean, Single Line, No Wrapping) */}
