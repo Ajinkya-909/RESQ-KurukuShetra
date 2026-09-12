@@ -38,12 +38,14 @@ export const connectSocket = (
     onError?: (err: any) => void;
   }
 ): Socket => {
-  if (socket && currentScenarioId === scenarioId && socket.connected) {
+  if (socket && currentScenarioId === scenarioId && (socket.connected || socket.active)) {
     return socket;
   }
 
   if (socket) {
-    socket.disconnect();
+    try {
+      socket.disconnect();
+    } catch (_) {}
   }
 
   currentScenarioId = scenarioId;
@@ -75,7 +77,13 @@ export const connectSocket = (
 
 export const disconnectSocket = () => {
   if (socket) {
-    socket.disconnect();
+    try {
+      if (socket.connected) {
+        socket.disconnect();
+      } else {
+        socket.close();
+      }
+    } catch (_) {}
     socket = null;
     currentScenarioId = null;
   }

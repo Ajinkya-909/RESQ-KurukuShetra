@@ -53,9 +53,15 @@ export const GoogleMapEngine: React.FC<TacticalMapProps> = ({
   // Resolved Real-World Road Routes
   const [resolvedRoutes, setResolvedRoutes] = useState<ResolvedSupplyLine[]>([]);
 
+  // Serialized keys to prevent infinite re-render loops when parent component passes new array instances
+  const supplyLinesKey = supplyLines
+    .map((s) => `${s.allocation_id || ''}_${s.from_lat}_${s.from_lng}_${s.to_lat}_${s.to_lng}_${s.status}`)
+    .join('|');
+  const activeHazardsKey = `${zones.map((z) => `${z.zone_id}_${z.center_lat}_${z.center_lng}`).join('|')}_${reports.map((r) => `${r.report_id}_${r.lat}_${r.lng}`).join('|')}`;
+
   useEffect(() => {
     if (!activeLayers.supplyLines || supplyLines.length === 0) {
-      setResolvedRoutes([]);
+      setResolvedRoutes((prev) => (prev.length > 0 ? [] : prev));
       return;
     }
 
@@ -94,7 +100,7 @@ export const GoogleMapEngine: React.FC<TacticalMapProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [supplyLines, activeLayers.supplyLines, zones, reports]);
+  }, [supplyLinesKey, activeLayers.supplyLines, activeHazardsKey]);
 
   // Animation Loop for Moving Dotted Supply Lines
   const [lineAnimOffset, setLineAnimOffset] = useState(0);
@@ -374,6 +380,8 @@ export const GoogleMapEngine: React.FC<TacticalMapProps> = ({
         {/* 5. Supply Lines (Animated Moving Dotted Road Vectors from Depot Source to Zone) */}
         {activeLayers.supplyLines &&
           resolvedRoutes.map((line, idx) => {
+            if (!line.path || !Array.isArray(line.path) || line.path.length < 2) return null;
+            if (!(window as any).google?.maps) return null;
             const isEnRoute = line.status === 'en_route';
             const color = isEnRoute ? '#0284C7' : '#10B981';
 

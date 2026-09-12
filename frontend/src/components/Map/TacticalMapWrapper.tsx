@@ -11,10 +11,8 @@ export const TacticalMapWrapper: React.FC<TacticalMapProps> = (props) => {
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
   const hasApiKey = Boolean(apiKey.trim());
 
-  // Engine selection state: 'google' or 'leaflet' (defaults to Google Maps if key present, else Leaflet)
-  const [selectedEngine, setSelectedEngine] = useState<'google' | 'leaflet'>(
-    hasApiKey ? 'google' : 'leaflet'
-  );
+  // Engine selection state: 'google' or 'leaflet' (defaults to Leaflet for reliable, zero-quota map rendering)
+  const [selectedEngine, setSelectedEngine] = useState<'google' | 'leaflet'>('leaflet');
 
   // Default internal layer toggle state if not controlled externally
   const [internalLayers, setInternalLayers] = useState<MapLayersState>({
@@ -37,6 +35,12 @@ export const TacticalMapWrapper: React.FC<TacticalMapProps> = (props) => {
     libraries: GOOGLE_MAPS_LIBRARIES,
     preventGoogleFontsLoading: true,
   });
+
+  React.useEffect(() => {
+    if (loadError) {
+      setSelectedEngine('leaflet');
+    }
+  }, [loadError]);
 
   // Render Google Maps if selected and loaded, else fallback to Leaflet cleanly without error warnings
   const renderGoogleMaps = selectedEngine === 'google' && isLoaded && !loadError;

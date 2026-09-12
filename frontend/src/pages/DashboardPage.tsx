@@ -195,26 +195,14 @@ const RightCommandPanel: React.FC<{
                   {/* Action Buttons */}
                   <div className="flex items-center gap-2 pt-1">
                     <button
-                      onClick={() => setConfirmAction({
-                        type: 'approve',
-                        allocationId: alloc.allocation_id,
-                        title: `Approve Dispatch Proposal #${alloc.allocation_id}?`,
-                        message: `Are you sure you want to approve allocating ${alloc.quantity} ${alloc.resource_name} from ${alloc.point_name} to ${alloc.zone_name}?`,
-                        variant: 'success',
-                      })}
+                      onClick={() => handleApprove(alloc.allocation_id)}
                       className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>Approve Dispatch</span>
                     </button>
                     <button
-                      onClick={() => setConfirmAction({
-                        type: 'reject',
-                        allocationId: alloc.allocation_id,
-                        title: `Reject Proposal #${alloc.allocation_id}?`,
-                        message: `Are you sure you want to reject this proposed dispatch of ${alloc.quantity} ${alloc.resource_name}?`,
-                        variant: 'danger',
-                      })}
+                      onClick={() => handleReject(alloc.allocation_id)}
                       className="flex-1 py-2 rounded-xl bg-white hover:bg-rose-50 border border-slate-200 text-rose-600 hover:border-rose-300 text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <XCircle className="w-3.5 h-3.5" />
@@ -238,29 +226,11 @@ const RightCommandPanel: React.FC<{
             ) : (
               Array.from(new Map(data.active_reports.map((r) => [r.report_id, r])).values()).map((rep) => {
                 const hasVisual = rep.visual_evidence || rep.image_url || rep.image_data || rep.extracted_json?.visual_evidence;
-
-              return (
-                <div key={rep.report_id} className={`p-4 rounded-2xl border space-y-3 shadow-sm ${
-                  rep.verification_status === 'duplicate'
+                return (
+                <div key={rep.report_id} className={`p-4 rounded-2xl border space-y-3 shadow-sm ${rep.verification_status === 'duplicate'
                     ? 'bg-amber-50/50 border-amber-300'
                     : 'bg-rose-50/40 border-rose-200'
-                }`}>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className={`font-extrabold uppercase flex items-center gap-1.5 ${
-                      rep.verification_status === 'duplicate' ? 'text-amber-800' : 'text-rose-700'
-                    }`}>
-                      <Radio className={`w-3.5 h-3.5 ${rep.verification_status === 'duplicate' ? 'text-amber-600' : 'text-rose-600 animate-pulse'}`} />
-                      <span>SOS #{rep.report_id} {rep.zone_name ? `• ${rep.zone_name}` : ''}</span>
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-mono">
-                      {new Date(rep.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                return (
-                  <div key={rep.report_id} className={`p-4 rounded-2xl border space-y-3 shadow-sm ${rep.verification_status === 'duplicate'
-                      ? 'bg-amber-50/50 border-amber-300'
-                      : 'bg-rose-50/40 border-rose-200'
-                    }`}>
+                  }`}>
                     <div className="flex items-center justify-between text-xs">
                       <span className={`font-extrabold uppercase flex items-center gap-1.5 ${rep.verification_status === 'duplicate' ? 'text-amber-800' : 'text-rose-700'
                         }`}>
@@ -337,6 +307,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const [copilotLoading, setCopilotLoading] = useState(false);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | undefined>(undefined);
   const [mapZoom, setMapZoom] = useState<number | undefined>(undefined);
+  const [selectedZone, setSelectedZone] = useState<Zone | null>(null);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [ticking, setTicking] = useState(false);
@@ -453,14 +424,20 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     try {
       setData((prev) => {
         if (!prev) return prev;
-        const currentKpi = prev.kpi || prev.kpis || {
+        const currentKpi = prev.kpi || {
           total_zones: 0, critical_zones: 0, affected_population: 0,
           active_sos_reports: 0, total_allocations: 0, pending_approvals: 0, resources_in_transit: 0,
         };
         const updatedKpi = {
-          ...currentKpi,
-          pending_approvals: Math.max(0, currentKpi.pending_approvals - 1),
-          resources_in_transit: currentKpi.resources_in_transit + 1,
+          total_zones: currentKpi.total_zones || 0,
+          critical_zones: currentKpi.critical_zones || 0,
+          affected_population: currentKpi.affected_population || 0,
+          active_sos_reports: currentKpi.active_sos_reports || 0,
+          total_allocations: currentKpi.total_allocations || 0,
+          pending_approvals: Math.max(0, (currentKpi.pending_approvals || 0) - 1),
+          resources_in_transit: (currentKpi.resources_in_transit || 0) + 1,
+          system_confidence: currentKpi.system_confidence,
+          corridor_efficiency_pct: currentKpi.corridor_efficiency_pct,
         };
         return {
           ...prev,
@@ -490,13 +467,20 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     try {
       setData((prev) => {
         if (!prev) return prev;
-        const currentKpi = prev.kpi || prev.kpis || {
+        const currentKpi = prev.kpi || {
           total_zones: 0, critical_zones: 0, affected_population: 0,
           active_sos_reports: 0, total_allocations: 0, pending_approvals: 0, resources_in_transit: 0,
         };
         const updatedKpi = {
-          ...currentKpi,
-          pending_approvals: Math.max(0, currentKpi.pending_approvals - 1),
+          total_zones: currentKpi.total_zones || 0,
+          critical_zones: currentKpi.critical_zones || 0,
+          affected_population: currentKpi.affected_population || 0,
+          active_sos_reports: currentKpi.active_sos_reports || 0,
+          total_allocations: currentKpi.total_allocations || 0,
+          pending_approvals: Math.max(0, (currentKpi.pending_approvals || 0) - 1),
+          resources_in_transit: currentKpi.resources_in_transit || 0,
+          system_confidence: currentKpi.system_confidence,
+          corridor_efficiency_pct: currentKpi.corridor_efficiency_pct,
         };
         return {
           ...prev,

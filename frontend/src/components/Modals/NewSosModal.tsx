@@ -52,15 +52,17 @@ const SosMapPicker: React.FC<SosMapPickerProps> = ({ lat, lng, onSelectLocation 
 
     // Leaflet modal size recalculation fixes
     const timer1 = setTimeout(() => {
-      map.invalidateSize();
+      if (mapRef.current) mapRef.current.invalidateSize();
     }, 100);
 
     const timer2 = setTimeout(() => {
-      map.invalidateSize();
+      if (mapRef.current) mapRef.current.invalidateSize();
     }, 300);
 
     const resizeObserver = new ResizeObserver(() => {
-      map.invalidateSize();
+      if (mapRef.current) {
+        mapRef.current.invalidateSize();
+      }
     });
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current);
@@ -70,8 +72,10 @@ const SosMapPicker: React.FC<SosMapPickerProps> = ({ lat, lng, onSelectLocation 
       clearTimeout(timer1);
       clearTimeout(timer2);
       resizeObserver.disconnect();
-      map.remove();
-      mapRef.current = null;
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
       markerRef.current = null;
     };
   }, []);

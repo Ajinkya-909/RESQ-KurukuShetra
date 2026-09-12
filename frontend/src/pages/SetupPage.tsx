@@ -262,7 +262,7 @@ export const SetupPage: React.FC<SetupPageProps> = ({
         center_lat: newZoneData.center_lat,
         center_lng: newZoneData.center_lng,
         radius_m: newZoneData.radius_m,
-        severity_level: newZoneData.severity_level,
+        severity_level: newZoneData.severity_level as any,
         severity_score: newZoneData.severity_score,
         population_estimate: newZoneData.population_estimate,
         disaster_type: newZoneData.disaster_type,

@@ -213,6 +213,18 @@ export interface DashboardData {
     zone_name?: string | null;
     raw_text?: string;
     created_at: string;
+    image_url?: string;
+    image_data?: string;
+    visual_evidence?: VisualEvidence;
+    extracted_json?: {
+      incident_type?: string;
+      stranded_count?: number;
+      medical_need?: string;
+      required_resources?: Array<{ resource: string; min_qty: number }> | string[];
+      image_url?: string;
+      image_data?: string;
+      visual_evidence?: VisualEvidence;
+    } | null;
     pending_allocations?: Array<{
       allocation_id: number;
       point_name: string;
