@@ -240,9 +240,8 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
       {/* 2. Feedback Notification */}
       {feedback && (
         <div
-          className={`px-6 py-2.5 text-xs font-bold flex items-center justify-between shadow-xs shrink-0 ${
-            feedback.type === 'error' ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
-          }`}
+          className={`px-6 py-2.5 text-xs font-bold flex items-center justify-between shadow-xs shrink-0 ${feedback.type === 'error' ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
+            }`}
         >
           <div className="flex items-center gap-2">
             {feedback.type === 'error' ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
@@ -297,11 +296,10 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
             <div className="flex items-center gap-1 bg-slate-200/70 p-1 rounded-xl w-full">
               <button
                 onClick={() => setActiveTab('inventory')}
-                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  activeTab === 'inventory'
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeTab === 'inventory'
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 <Boxes className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Helping Inventory & Aid</span>
@@ -309,11 +307,10 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
 
               <button
                 onClick={() => setActiveTab('missions')}
-                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  activeTab === 'missions'
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${activeTab === 'missions'
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 <Truck className="w-3.5 h-3.5 text-blue-600" />
                 <span>Active Missions ({agencyAllocations.length})</span>
@@ -352,9 +349,8 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
                           Reliability: {(depot.reliability_score * 100).toFixed(0)}% • Cap: {(depot.arrangement_capability * 100).toFixed(0)}%
                         </span>
                       </div>
-                      <span className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${
-                        depot.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                      }`}>
+                      <span className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${depot.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                        }`}>
                         {depot.status}
                       </span>
                     </div>
@@ -452,13 +448,12 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
                         Order #{alloc.allocation_id}
                       </span>
                       <span
-                        className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${
-                          alloc.status === 'delivered'
+                        className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${alloc.status === 'delivered'
                             ? 'bg-emerald-100 text-emerald-800'
                             : alloc.status === 'en_route' || alloc.status === 'dispatched'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
                       >
                         {alloc.status}
                       </span>

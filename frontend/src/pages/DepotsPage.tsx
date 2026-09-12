@@ -282,9 +282,8 @@ export const DepotsPage: React.FC<DepotsPageProps> = ({
       {/* 2. Feedback Notification */}
       {feedback && (
         <div
-          className={`px-8 py-3 text-sm font-bold flex items-center justify-between shadow-xs transition-all ${
-            feedback.type === 'error' ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
-          }`}
+          className={`px-8 py-3 text-sm font-bold flex items-center justify-between shadow-xs transition-all ${feedback.type === 'error' ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
+            }`}
         >
           <div className="flex items-center gap-2.5">
             {feedback.type === 'error' ? (
@@ -395,11 +394,10 @@ export const DepotsPage: React.FC<DepotsPageProps> = ({
               <button
                 key={f.id}
                 onClick={() => setSelectedAgency(f.id)}
-                className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer whitespace-nowrap ${
-                  selectedAgency === f.id
+                className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer whitespace-nowrap ${selectedAgency === f.id
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                     : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                }`}
+                  }`}
               >
                 {f.label}
               </button>
@@ -423,9 +421,8 @@ export const DepotsPage: React.FC<DepotsPageProps> = ({
             <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0">
               <button
                 onClick={() => setViewMode('cards')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
-                  viewMode === 'cards' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${viewMode === 'cards' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
                 title="Cards View"
               >
                 <LayoutGrid className="w-4 h-4" />
@@ -434,9 +431,8 @@ export const DepotsPage: React.FC<DepotsPageProps> = ({
 
               <button
                 onClick={() => setViewMode('table')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${
-                  viewMode === 'table' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                }`}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${viewMode === 'table' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
                 title="Master Table View"
               >
                 <TableIcon className="w-4 h-4" />

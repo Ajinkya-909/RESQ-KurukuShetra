@@ -20,15 +20,15 @@ const INCLUDE_INVENTORY = {
 const formatPoint = (p) => ({
   ...p,
   inventory: (p.inventory || []).map((i) => ({
-    resource_id:     i.resource_id,
-    resource_name:   i.resource_type.name,
-    unit:            i.resource_type.unit,
-    total_stock:     i.total_stock,
+    resource_id: i.resource_id,
+    resource_name: i.resource_type.name,
+    unit: i.resource_type.unit,
+    total_stock: i.total_stock,
     available_stock: i.available_stock,
-    reserved_stock:  i.reserved_stock,
-    in_transit:      i.in_transit,
-    max_capacity:    i.max_capacity,
-    replenish_rate:  i.replenish_rate,
+    reserved_stock: i.reserved_stock,
+    in_transit: i.in_transit,
+    max_capacity: i.max_capacity,
+    replenish_rate: i.replenish_rate,
   })),
 });
 
@@ -88,11 +88,11 @@ router.post('/', async (req, res, next) => {
         name, type, lat, lng, reliability_score, arrangement_capability,
         inventory: {
           create: inventory.map((i) => ({
-            resource_id:     i.resource_id,
-            total_stock:     i.total_stock ?? 0,
+            resource_id: i.resource_id,
+            total_stock: i.total_stock ?? 0,
             available_stock: i.total_stock ?? 0,
-            max_capacity:    i.max_capacity ?? 0,
-            replenish_rate:  i.replenish_rate ?? 0,
+            max_capacity: i.max_capacity ?? 0,
+            replenish_rate: i.replenish_rate ?? 0,
           })),
         },
       },
@@ -142,12 +142,12 @@ router.patch('/:id/inventory', async (req, res, next) => {
         prisma.helpingPointInventory.update({
           where: { point_id_resource_id: { point_id: pointId, resource_id: u.resource_id } },
           data: {
-            ...(u.total_stock !== undefined     && { total_stock: u.total_stock }),
+            ...(u.total_stock !== undefined && { total_stock: u.total_stock }),
             ...(u.available_stock !== undefined && { available_stock: u.available_stock }),
-            ...(u.reserved_stock !== undefined  && { reserved_stock: u.reserved_stock }),
-            ...(u.in_transit !== undefined      && { in_transit: u.in_transit }),
-            ...(u.max_capacity !== undefined    && { max_capacity: u.max_capacity }),
-            ...(u.replenish_rate !== undefined  && { replenish_rate: u.replenish_rate }),
+            ...(u.reserved_stock !== undefined && { reserved_stock: u.reserved_stock }),
+            ...(u.in_transit !== undefined && { in_transit: u.in_transit }),
+            ...(u.max_capacity !== undefined && { max_capacity: u.max_capacity }),
+            ...(u.replenish_rate !== undefined && { replenish_rate: u.replenish_rate }),
           },
         })
       )
