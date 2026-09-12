@@ -202,34 +202,41 @@ INSERT INTO resource_types (name, unit) VALUES
     ('rescue_boat',  'boats');
 
 INSERT INTO helping_points (name, type, lat, lng, reliability_score, arrangement_capability) VALUES
-    ('NDRF Base Camp Alpha',        'govt',     18.5350, 73.8420, 0.95, 0.85),
-    ('Red Cross Central Depot',     'ngo',      18.5110, 73.8710, 0.90, 0.60),
-    ('Municipal General Hospital',  'hospital', 18.5280, 73.8650, 0.92, 0.40),
-    ('Army Logistics Forward Base', 'military', 18.5450, 73.8300, 0.98, 0.90),
-    ('Community Volunteer Hub',     'private',  18.5050, 73.8550, 0.75, 0.30);
+    ('NDRF Base Camp Alpha',                 'govt',     18.5350, 73.8420, 0.95, 0.85),
+    ('Red Cross Central Relief Depot',       'ngo',      18.5110, 73.8710, 0.90, 0.60),
+    ('Municipal General Emergency Hospital', 'hospital', 18.5280, 73.8650, 0.92, 0.40),
+    ('Army Logistics Forward Operating Base','military', 18.5450, 73.8300, 0.98, 0.90),
+    ('Swargate Community Volunteer Center',  'private',  18.5050, 73.8550, 0.75, 0.30),
+    ('NDRF Tactical Battalion 5',            'govt',     18.5600, 73.8100, 0.96, 0.88),
+    ('Sassoon Trauma & Medical Staging',     'hospital', 18.5250, 73.8750, 0.94, 0.50),
+    ('Air Force Relief Airfield Logistics',  'military', 18.5800, 73.9200, 0.99, 0.95),
+    ('Seva Bharathi Disaster Relief Hub',    'ngo',      18.4900, 73.8300, 0.88, 0.55),
+    ('Civil Defence Rapid Command Outpost',  'private',  18.5150, 73.9100, 0.82, 0.45);
 
--- NDRF Base Camp Alpha inventory
+-- 1. NDRF Base Camp Alpha inventory
 INSERT INTO helping_point_inventory (point_id, resource_id, total_stock, available_stock, max_capacity, replenish_rate) VALUES
-    (1, 1, 15000, 15000, 20000, 500),   -- water: 15000L
-    (1, 2, 2000,  2000,  3000,  200),   -- food: 2000 packets
-    (1, 3, 500,   500,   800,   30),    -- medical: 500 kits
-    (1, 4, 12,    12,    15,    0.5),   -- rescue_team: 12 teams
-    (1, 5, 4,     4,     6,     0),     -- ambulance: 4
-    (1, 7, 6,     6,     8,     0);     -- rescue_boat: 6
+    (1, 1, 15000, 15000, 20000, 500),   -- water
+    (1, 2, 2000,  2000,  3000,  200),   -- food
+    (1, 3, 500,   500,   800,   30),    -- medical
+    (1, 4, 12,    12,    15,    0.5),   -- rescue_team
+    (1, 5, 4,     4,     6,     0),     -- ambulance
+    (1, 7, 6,     6,     8,     0);     -- rescue_boat
 
--- Red Cross Central Depot inventory
+-- 2. Red Cross Central Relief Depot inventory
 INSERT INTO helping_point_inventory (point_id, resource_id, total_stock, available_stock, max_capacity, replenish_rate) VALUES
     (2, 1, 8000,  8000,  12000, 300),   -- water
     (2, 2, 5000,  5000,  8000,  400),   -- food
     (2, 3, 200,   200,   400,   15),    -- medical
-    (2, 6, 300,   300,   500,   10);    -- shelter: 300 tents
+    (2, 6, 300,   300,   500,   10);    -- shelter
 
--- Municipal General Hospital inventory
+-- 3. Municipal General Emergency Hospital inventory
 INSERT INTO helping_point_inventory (point_id, resource_id, total_stock, available_stock, max_capacity, replenish_rate) VALUES
-    (3, 3, 800,   800,   1200,  50),    -- medical: 800 kits
-    (3, 5, 6,     6,     10,    0);     -- ambulance: 6
+    (3, 1, 3000,  3000,  5000,  100),   -- water
+    (3, 2, 1000,  1000,  2000,  50),    -- food
+    (3, 3, 800,   800,   1200,  50),    -- medical
+    (3, 5, 6,     6,     10,    0);     -- ambulance
 
--- Army Logistics Forward Base inventory
+-- 4. Army Logistics Forward Operating Base inventory
 INSERT INTO helping_point_inventory (point_id, resource_id, total_stock, available_stock, max_capacity, replenish_rate) VALUES
     (4, 1, 20000, 20000, 30000, 1000),  -- water
     (4, 2, 8000,  8000,  12000, 600),   -- food
@@ -238,8 +245,45 @@ INSERT INTO helping_point_inventory (point_id, resource_id, total_stock, availab
     (4, 5, 3,     3,     5,     0),     -- ambulance
     (4, 7, 4,     4,     6,     0);     -- rescue_boat
 
--- Community Volunteer Hub inventory
+-- 5. Swargate Community Volunteer Center inventory
 INSERT INTO helping_point_inventory (point_id, resource_id, total_stock, available_stock, max_capacity, replenish_rate) VALUES
     (5, 1, 3000,  3000,  5000,  100),   -- water
     (5, 2, 2000,  2000,  3000,  150),   -- food
     (5, 6, 100,   100,   200,   5);     -- shelter
+
+-- 6. NDRF Tactical Battalion 5 inventory
+INSERT INTO helping_point_inventory (point_id, resource_id, total_stock, available_stock, max_capacity, replenish_rate) VALUES
+    (6, 1, 12000, 12000, 15000, 400),   -- water
+    (6, 2, 3000,  3000,  5000,  250),   -- food
+    (6, 3, 400,   400,   600,   25),    -- medical
+    (6, 4, 10,    10,    12,    1),     -- rescue_team
+    (6, 7, 5,     5,     8,     0);     -- rescue_boat
+
+-- 7. Sassoon Trauma & Medical Staging inventory
+INSERT INTO helping_point_inventory (point_id, resource_id, total_stock, available_stock, max_capacity, replenish_rate) VALUES
+    (7, 1, 5000,  5000,  8000,  150),   -- water
+    (7, 2, 1500,  1500,  3000,  100),   -- food
+    (7, 3, 1200,  1200,  1500,  60),    -- medical
+    (7, 5, 8,     8,     12,    0);     -- ambulance
+
+-- 8. Air Force Relief Airfield Logistics inventory
+INSERT INTO helping_point_inventory (point_id, resource_id, total_stock, available_stock, max_capacity, replenish_rate) VALUES
+    (8, 1, 25000, 25000, 35000, 1200),  -- water
+    (8, 2, 10000, 10000, 15000, 800),   -- food
+    (8, 3, 600,   600,   1000,  40),    -- medical
+    (8, 6, 500,   500,   800,   20),    -- shelter
+    (8, 7, 8,     8,     10,    0);     -- rescue_boat
+
+-- 9. Seva Bharathi Disaster Relief Hub inventory
+INSERT INTO helping_point_inventory (point_id, resource_id, total_stock, available_stock, max_capacity, replenish_rate) VALUES
+    (9, 1, 6000,  6000,  10000, 200),   -- water
+    (9, 2, 4000,  4000,  6000,  300),   -- food
+    (9, 3, 150,   150,   300,   10),    -- medical
+    (9, 6, 200,   200,   400,   10);    -- shelter
+
+-- 10. Civil Defence Rapid Command Outpost inventory
+INSERT INTO helping_point_inventory (point_id, resource_id, total_stock, available_stock, max_capacity, replenish_rate) VALUES
+    (10, 1, 7500, 7500,  10000, 250),   -- water
+    (10, 2, 3500, 3500,  5000,  200),   -- food
+    (10, 3, 250,  250,   400,   15),    -- medical
+    (10, 5, 4,    4,     6,     0);     -- ambulance

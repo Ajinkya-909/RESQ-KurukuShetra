@@ -30,10 +30,11 @@ interface AgencyPageProps {
 }
 
 const AGENCIES = [
-  { id: 'govt', name: 'National Disaster Response Force (NDRF)', icon: Shield, badgeColor: 'bg-blue-600' },
+  { id: 'all', name: 'All Agency Units (10 Regional Hubs)', icon: Layers, badgeColor: 'bg-indigo-600' },
+  { id: 'govt', name: 'National Disaster Response Force', icon: Shield, badgeColor: 'bg-blue-600' },
   { id: 'ngo', name: 'Indian Red Cross Society', icon: Users, badgeColor: 'bg-rose-600' },
   { id: 'hospital', name: 'Municipal Health Services', icon: Building, badgeColor: 'bg-emerald-600' },
-  { id: 'military', name: 'Army Logistics Corps', icon: Shield, badgeColor: 'bg-amber-600' },
+  { id: 'military', name: 'Army & Air Force Logistics Corps', icon: Shield, badgeColor: 'bg-amber-600' },
   { id: 'private', name: 'Civil Defence & Volunteers', icon: Users, badgeColor: 'bg-purple-600' },
 ];
 
@@ -42,7 +43,7 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
   onNavigateHome,
   onNavigateToDashboard,
 }) => {
-  const [selectedAgencyId, setSelectedAgencyId] = useState('govt');
+  const [selectedAgencyId, setSelectedAgencyId] = useState('all');
   const [activeTab, setActiveTab] = useState<'inventory' | 'missions'>('inventory');
   const [depots, setDepots] = useState<HelpingPoint[]>([]);
   const [allocations, setAllocations] = useState<Allocation[]>([]);
@@ -94,7 +95,7 @@ export const AgencyPage: React.FC<AgencyPageProps> = ({
 
   // Filter depots & allocations belonging to the selected organization
   const agencyDepots = useMemo(
-    () => depots.filter((d) => d.type === selectedAgencyId),
+    () => (selectedAgencyId === 'all' ? depots : depots.filter((d) => d.type === selectedAgencyId)),
     [depots, selectedAgencyId]
   );
 
